@@ -116,7 +116,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (searchResults.isNotEmpty) _buildSearchResults() else _buildPopularServices(),
+            if (searchResults.isNotEmpty)
+              _buildSearchResults()
+            else
+              _buildServices(),
           ],
         ),
       ),
@@ -139,13 +142,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPopularServices() {
+  Widget _buildServices() {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Servicios más populares',
+            'Servicios de emergencia',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
@@ -159,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHorizontalList(List<dynamic> items) {
     return SizedBox(
-      height: 180,
+      height: 200,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -172,67 +175,62 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildServiceCard(dynamic service) {
-    final String name = service['name'] ?? 'Sin nombre';
-    final String description = service['description'] ?? 'Sin descripción';
-    final String imageUrl = service['image'] ?? ''; // Reemplaza con el campo correcto de la API
-    final double price = service['price'] ?? 0.0;
+    final String name = service['name'] ?? 'NoName';
+    final String imageUrl = service['image'] ?? '';
+    final String description = service['description'] ?? 'No description available';
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 4,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: SizedBox(
-          width: 150,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (imageUrl.isNotEmpty)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    imageUrl,
-                    height: 80,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Text(
+      child: SizedBox(
+        width: 180,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Imagen del servicio
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      height: 100,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          Image.asset('assets/no_image.png', height: 100, fit: BoxFit.cover),
+                    )
+                  : Image.asset('assets/no_image.png', height: 100, fit: BoxFit.cover),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
                 name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-              const SizedBox(height: 4),
-              Text(
-                _truncateText(description, 40),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                _truncateText(description, 50),
                 style: const TextStyle(color: Colors.grey),
               ),
-              const Spacer(),
-              Text(
-                '\$${price.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  // Aquí puedes añadir la lógica para "Más información"
-                },
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton(
+                onPressed: () {},
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text('Más información'),
+                child: const Text('Solicitar'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
