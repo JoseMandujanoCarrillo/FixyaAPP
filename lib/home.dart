@@ -20,27 +20,21 @@ class _HomeScreenState extends State<HomeScreen> {
     _getServices();
   }
 
-  // Obtiene servicios de la API
   Future<void> _getServices() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/services?page=1&size=5'),
+    final response = await http
+        .get(Uri.parse('https://apifixya.onrender.com/services?page=1&size=5'));
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        services = data['data'];
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error al cargar los servicios')),
       );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() {
-          services = data['data'] ?? [];
-        });
-      } else {
-        _showSnackBar('Error al cargar los servicios');
-      }
-    } catch (e) {
-      _showSnackBar('Ocurrió un error: $e');
     }
   }
 
-  // Busca servicios en la API
   Future<void> _searchServices(String query) async {
     if (query.isEmpty) {
       setState(() {
@@ -49,28 +43,18 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    try {
-      final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/services/search?query=$query'),
+    final response = await http.get(Uri.parse(
+        'https://apifixya.onrender.com/services/search?query=$query'));
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        searchResults = data['data'];
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se encontraron resultados')),
       );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() {
-          searchResults = data['data'] ?? [];
-        });
-      } else {
-        _showSnackBar('No se encontraron resultados');
-      }
-    } catch (e) {
-      _showSnackBar('Ocurrió un error: $e');
     }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
@@ -91,152 +75,150 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Hola, User!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: searchController,
-              onChanged: (value) => _searchServices(value),
-              decoration: InputDecoration(
-                hintText: 'Buscar un servicio, categoría...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Hola, User!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            if (searchResults.isNotEmpty)
-              _buildSearchResults()
-            else
-              _buildServices(),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: searchController,
+                onChanged: (value) => _searchServices(value),
+                decoration: InputDecoration(
+                  hintText: 'Buscar un servicio, categoría...',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              if (searchResults.isNotEmpty)
+                _buildServiceList('Resultados de búsqueda', searchResults)
+              else
+                _buildServiceList('Servicios de emergencia', services),
+              _buildServiceList('Servicios más populares', services),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSearchResults() {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Resultados de búsqueda',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+  Widget _buildServiceList(String title, List<dynamic> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: 16),
-          _buildHorizontalList(searchResults),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServices() {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Servicios de emergencia',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          services.isEmpty
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 180,
+          child: items.isEmpty
               ? const Center(child: CircularProgressIndicator())
-              : _buildHorizontalList(services),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHorizontalList(List<dynamic> items) {
-    return SizedBox(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final service = items[index];
-          return _buildServiceCard(service);
-        },
-      ),
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final service = items[index];
+                    return _buildServiceCard(service);
+                  },
+                ),
+        ),
+      ],
     );
   }
 
   Widget _buildServiceCard(dynamic service) {
-    final String name = service['name'] ?? 'NoName';
-    final String imageUrl = service['image'] ?? '';
-    final String description = service['description'] ?? 'No description available';
-
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       elevation: 4,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: SizedBox(
-        width: 180,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Imagen del servicio
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: imageUrl.isNotEmpty
-                  ? Image.network(
-                      imageUrl,
-                      height: 100,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          Image.asset('assets/no_image.png', height: 100, fit: BoxFit.cover),
-                    )
-                  : Image.asset('assets/no_image.png', height: 100, fit: BoxFit.cover),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Image.network(
+              service['image_url'] ?? 'https://imgur.com/GbCHvXU.png',
+              height: 100,
+              width: 150,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Image.network(
+                  'https://imgur.com/GbCHvXU.png',
+                  height: 100,
+                  width: 150,
+                  fit: BoxFit.cover,
+                );
+              },
             ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                name,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                _truncateText(description, 50),
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  service['name'] ?? 'Sin nombre',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
-                child: const Text('Solicitar'),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  _truncateText(
+                      service['description'] ?? 'Sin descripción', 50),
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '\$${service['price'] ?? '0.00'} MXN',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () {},
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Solicitar'),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   String _truncateText(String text, int length) {
-    return text.length > length ? '${text.substring(0, length)}...' : text;
+    return text.length > length ? text.substring(0, length) + '...' : text;
   }
 }
