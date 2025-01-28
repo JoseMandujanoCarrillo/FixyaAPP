@@ -12,6 +12,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> services = [];
   List<dynamic> searchResults = [];
+
   final TextEditingController searchController = TextEditingController();
 
   @override
@@ -129,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 180,
+          height: 240,
           child: items.isEmpty
               ? const Center(child: CircularProgressIndicator())
               : ListView.builder(
@@ -151,69 +152,94 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(16),
       ),
       elevation: 4,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.network(
-              service['image_url'] ?? 'https://imgur.com/GbCHvXU.png',
-              height: 100,
-              width: 150,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Image.network(
-                  'https://imgur.com/GbCHvXU.png',
-                  height: 100,
-                  width: 150,
-                  fit: BoxFit.cover,
-                );
-              },
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: SizedBox(
+        width: 160,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              child: Image.network(
+                service['image_url'] ?? 'https://imgur.com/GbCHvXU.png',
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.network(
+                    'https://imgur.com/GbCHvXU.png',
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  );
+                },
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  service['name'] ?? 'Sin nombre',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service['name'] ?? 'Sin nombre',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _truncateText(
-                      service['description'] ?? 'Sin descripción', 50),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '\$${service['price'] ?? '0.00'} MXN',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                  const SizedBox(height: 4),
+                  Text(
+                    _truncateText(
+                        service['description'] ?? 'Sin descripción', 50),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\$${service['price'] ?? '0.00'} MXN',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
                     ),
                   ),
-                  child: const Text('Solicitar'),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          minimumSize: const Size(60, 30),
+                        ),
+                        child: const Text('Solicitar'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          minimumSize: const Size(60, 30),
+                        ),
+                        child: const Text('Más info'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
