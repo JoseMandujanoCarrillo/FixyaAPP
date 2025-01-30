@@ -50,7 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const SizedBox(height: 50),
               const Text(
-                'NimBus',
+                'What clean',
                 style: TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.bold,
@@ -74,7 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 20),
               const Text(
-                'Regístrate en NimBus',
+                'Regístrate en What clean',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -82,7 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'NimBus quiere tener una mayor seguridad para sus usuarios, '
+                'What clean quiere tener una mayor seguridad para sus usuarios, '
                 'por eso queremos que crees una cuenta para disfrutar los beneficios.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey),

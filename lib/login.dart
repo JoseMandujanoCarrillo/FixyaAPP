@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,8 +13,23 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  bool isLoading = false;
 
   Future<void> login() async {
+    setState(() {
+      isLoading = true;
+    });
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return const Center(
+          child: CircularProgressIndicator(),
+        );
+      },
+    );
+
     final url = Uri.parse('https://apifixya.onrender.com/users/login');
     final response = await http.post(
       url,
@@ -24,11 +40,20 @@ class _LoginScreenState extends State<LoginScreen> {
       }),
     );
 
+    Navigator.pop(context); // Cerrar el diálogo de carga
+    
+    setState(() {
+      isLoading = false;
+    });
+
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final token = data['token'];
 
-      // Guardar el token y navegar a la pantalla principal
+      // Guardar el token en SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', token);
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Inicio de sesión exitoso')),
       );
@@ -49,7 +74,6 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Logo y fondo
             Container(
               height: 200,
               width: double.infinity,
@@ -61,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
                   Text(
-                    'NimBus',
+                    'What clean',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
@@ -70,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   SizedBox(height: 10),
                   Image(
-                    image: AssetImage('assets/cleaning.png'), // Reemplaza con la ruta de tu imagen
+                    image: AssetImage('assets/cleaning.png'),
                     height: 80,
                   ),
                 ],
@@ -83,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Inicia sesión en NimBus',
+                    'Inicia sesión en What clean',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -92,11 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'NimBus quiere tener una mayor seguridad para sus usuarios, por eso queremos que crees una cuenta para disfrutar los beneficios.',
+                    'What clean quiere tener una mayor seguridad para sus usuarios, por eso queremos que crees una cuenta para disfrutar los beneficios.',
                     style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
-                  // Correo
                   TextField(
                     controller: emailController,
                     decoration: InputDecoration(
@@ -113,7 +136,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // Contraseña
                   TextField(
                     controller: passwordController,
                     decoration: InputDecoration(
@@ -131,7 +153,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: true,
                   ),
                   const SizedBox(height: 30),
-                  // Botón
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -142,15 +163,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 15),
                       ),
-                      onPressed: login,
-                      child: const Text(
-                        'Entrar',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
-                      ),
+                      onPressed: isLoading ? null : login,
+                      child: isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Entrar',
+                              style: TextStyle(fontSize: 18, color: Colors.white),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Texto de registro
                   Center(
                     child: TextButton(
                       onPressed: () {

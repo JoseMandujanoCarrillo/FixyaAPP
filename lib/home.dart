@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'calendar_screen.dart'; // Ajusta la ruta según tu estructura
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,23 +12,44 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> services = [];
-  List<dynamic> searchResults = [];
+  String userName = "Usuario";
+  int _selectedIndex = 0;
 
   final TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _getUserData();
     _getServices();
   }
 
-  Future<void> _getServices() async {
-    final response = await http
-        .get(Uri.parse('https://apifixya.onrender.com/services?page=1&size=5'));
+  Future<void> _getUserData() async {
+    final response = await http.get(
+      Uri.parse('https://apifixya.onrender.com/user/profile'),
+      headers: {
+        'Authorization': 'Bearer TU_TOKEN_AQUI',
+      },
+    );
+
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       setState(() {
-        services = data['data'];
+        userName = data['name'] ?? 'Usuario';
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error al obtener los datos del usuario')),
+      );
+    }
+  }
+
+  Future<void> _getServices() async {
+    final response = await http.get(Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'));
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        services = _prioritizeWithImages(data['data']);
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -36,26 +58,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _searchServices(String query) async {
-    if (query.isEmpty) {
-      setState(() {
-        searchResults.clear();
-      });
-      return;
-    }
+  List<dynamic> _prioritizeWithImages(List<dynamic> items) {
+    return List.from(items)..sort((a, b) {
+      final aHasImage = (a['imageUrl'] != null && a['imageUrl'].isNotEmpty) ? 1 : 0;
+      final bHasImage = (b['imageUrl'] != null && b['imageUrl'].isNotEmpty) ? 1 : 0;
+      return bHasImage.compareTo(aHasImage);
+    });
+  }
 
-    final response = await http.get(Uri.parse(
-        'https://apifixya.onrender.com/services/search?query=$query'));
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      setState(() {
-        searchResults = data['data'];
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se encontraron resultados')),
-      );
-    }
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
@@ -76,42 +90,75 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Hola, User!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+      body: _buildPageContent(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        selectedItemColor: Colors.white,
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        showUnselectedLabels: false,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home, color: Colors.black), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today, color: Colors.black), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.menu, color: Colors.black), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.person, color: Colors.black), label: ''),
+        ],
+      ),
+    );
+  }
+
+Widget _buildPageContent() {
+  switch (_selectedIndex) {
+    case 1:
+      return const CalendarScreen(); // Aquí cargamos la pantalla del calendario
+    case 2:
+      return const Center(child: Text('Menú'));
+    case 3:
+      return const Center(child: Text('Perfil'));
+    default:
+      return _buildHomeContent();
+  }
+}
+
+
+  Widget _buildHomeContent() {
+    final popularServices = services.take(5).toList();
+    final cleanFlashServices = services.skip(5).toList();
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Hola, $userName!',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar un servicio, categoría...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: searchController,
-                onChanged: (value) => _searchServices(value),
-                decoration: InputDecoration(
-                  hintText: 'Buscar un servicio, categoría...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              if (searchResults.isNotEmpty)
-                _buildServiceList('Resultados de búsqueda', searchResults)
-              else
-                _buildServiceList('Servicios de emergencia', services),
-              _buildServiceList('Servicios más populares', services),
-            ],
-          ),
+            ),
+            const SizedBox(height: 24),
+            _buildServiceList('Servicios populares', popularServices),
+            const SizedBox(height: 24),
+            _buildServiceList('Clean Flash', cleanFlashServices),
+          ],
         ),
       ),
     );
@@ -137,8 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   scrollDirection: Axis.horizontal,
                   itemCount: items.length,
                   itemBuilder: (context, index) {
-                    final service = items[index];
-                    return _buildServiceCard(service);
+                    return _buildServiceCard(items[index]);
                   },
                 ),
         ),
@@ -148,103 +194,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildServiceCard(dynamic service) {
     return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 4,
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: SizedBox(
         width: 160,
+        height: 200,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: Image.network(
-                service['image_url'] ?? 'https://imgur.com/GbCHvXU.png',
+                service['imageUrl'] ?? 'https://imgur.com/GbCHvXU.png',
                 height: 120,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Image.network(
-                    'https://imgur.com/GbCHvXU.png',
-                    height: 120,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  );
-                },
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    service['name'] ?? 'Sin nombre',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _truncateText(
-                        service['description'] ?? 'Sin descripción', 50),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '\$${service['price'] ?? '0.00'} MXN',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          minimumSize: const Size(60, 30),
-                        ),
-                        child: const Text('Solicitar'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          minimumSize: const Size(60, 30),
-                        ),
-                        child: const Text('Más info'),
-                      ),
-                    ],
-                  ),
-                ],
+              child: Text(service['name'] ?? 'Sin nombre',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  String _truncateText(String text, int length) {
-    return text.length > length ? text.substring(0, length) + '...' : text;
   }
 }
