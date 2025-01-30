@@ -45,7 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _getServices() async {
-    final response = await http.get(Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'));
+    final response = await http.get(
+        Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'));
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       setState(() {
@@ -59,11 +60,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<dynamic> _prioritizeWithImages(List<dynamic> items) {
-    return List.from(items)..sort((a, b) {
-      final aHasImage = (a['imageUrl'] != null && a['imageUrl'].isNotEmpty) ? 1 : 0;
-      final bHasImage = (b['imageUrl'] != null && b['imageUrl'].isNotEmpty) ? 1 : 0;
-      return bHasImage.compareTo(aHasImage);
-    });
+    return List.from(items)
+      ..sort((a, b) {
+        final aHasImage =
+            (a['imageUrl'] != null && a['imageUrl'].isNotEmpty) ? 1 : 0;
+        final bHasImage =
+            (b['imageUrl'] != null && b['imageUrl'].isNotEmpty) ? 1 : 0;
+        return bHasImage.compareTo(aHasImage);
+      });
   }
 
   void _onItemTapped(int index) {
@@ -100,28 +104,31 @@ class _HomeScreenState extends State<HomeScreen> {
         showUnselectedLabels: false,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home, color: Colors.black), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today, color: Colors.black), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.menu, color: Colors.black), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.person, color: Colors.black), label: ''),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home, color: Colors.black), label: ''),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today, color: Colors.black), label: ''),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.menu, color: Colors.black), label: ''),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person, color: Colors.black), label: ''),
         ],
       ),
     );
   }
 
-Widget _buildPageContent() {
-  switch (_selectedIndex) {
-    case 1:
-      return const CalendarScreen(); // Aquí cargamos la pantalla del calendario
-    case 2:
-      return const Center(child: Text('Menú'));
-    case 3:
-      return const Center(child: Text('Perfil'));
-    default:
-      return _buildHomeContent();
+  Widget _buildPageContent() {
+    switch (_selectedIndex) {
+      case 1:
+        return const CalendarScreen(); // Aquí cargamos la pantalla del calendario
+      case 2:
+        return const Center(child: Text('Menú'));
+      case 3:
+        return const Center(child: Text('Perfil'));
+      default:
+        return _buildHomeContent();
+    }
   }
-}
-
 
   Widget _buildHomeContent() {
     final popularServices = services.take(5).toList();
@@ -199,12 +206,13 @@ Widget _buildPageContent() {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: SizedBox(
         width: 160,
-        height: 200,
+        height: 220,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               child: Image.network(
                 service['imageUrl'] ?? 'https://imgur.com/GbCHvXU.png',
                 height: 120,
@@ -214,10 +222,27 @@ Widget _buildPageContent() {
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Text(service['name'] ?? 'Sin nombre',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service['name'] ?? 'Sin nombre',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    service['price'] != null
+                        ? '\$${service['price']}'
+                        : 'Consultar',
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
           ],
