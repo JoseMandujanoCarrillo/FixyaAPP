@@ -14,12 +14,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
+  String? userToken; // Variable para almacenar el token del usuario
 
   Future<void> login() async {
     setState(() {
       isLoading = true;
     });
-    
+
+    // Mostrar un diálogo de carga
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -30,38 +32,65 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     );
 
-    final url = Uri.parse('https://apifixya.onrender.com/users/login');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'email': emailController.text,
-        'password': passwordController.text,
-      }),
-    );
-
-    Navigator.pop(context); // Cerrar el diálogo de carga
-    
-    setState(() {
-      isLoading = false;
-    });
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final token = data['token'];
-
-      // Guardar el token en SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', token);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inicio de sesión exitoso')),
+    try {
+      // URL del endpoint de login
+      final url = Uri.parse('https://apifixya.onrender.com/users/login');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': emailController.text,
+          'password': passwordController.text,
+        }),
       );
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
+
+      // Cerrar el diálogo de carga
+      Navigator.pop(context);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        userToken = data['token']; // Guardar el token en la variable
+
+        // Obtener los datos del usuario desde el endpoint /users/me
+        final userResponse = await http.get(
+          Uri.parse('https://apifixya.onrender.com/users/me'),
+          headers: {'Authorization': 'Bearer $userToken'},
+        );
+
+        if (userResponse.statusCode == 200) {
+          final userData = json.decode(userResponse.body);
+
+          // Guardar el token y los datos del usuario en SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('token', userToken!);
+          await prefs.setInt('userId', userData['id']);
+          await prefs.setString('userName', userData['name']);
+
+          // Mostrar un mensaje de éxito
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Inicio de sesión exitoso')),
+          );
+
+          // Redirigir a HomeScreen
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          throw Exception('Error al obtener los datos del usuario');
+        }
+      } else {
+        // Mostrar un mensaje de error si el inicio de sesión falla
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${response.body}')),
+        );
+      }
+    } catch (e) {
+      // Manejar cualquier excepción que ocurra durante el proceso
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${response.body}')),
+        SnackBar(content: Text('Error: $e')),
       );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
@@ -74,6 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Encabezado con logo y nombre de la aplicación
             Container(
               height: 200,
               width: double.infinity,
@@ -101,6 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            // Formulario de inicio de sesión
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
@@ -120,6 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
+                  // Campo de correo electrónico
                   TextField(
                     controller: emailController,
                     decoration: InputDecoration(
@@ -136,6 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // Campo de contraseña
                   TextField(
                     controller: passwordController,
                     decoration: InputDecoration(
@@ -153,6 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: true,
                   ),
                   const SizedBox(height: 30),
+                  // Botón de inicio de sesión
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -173,6 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  // Enlace para redirigir a la pantalla de registro
                   Center(
                     child: TextButton(
                       onPressed: () {

@@ -36,7 +36,8 @@ dependencies:
   provider: ^6.1.2
   google_fonts: ^6.1.0
   shared_preferences: ^2.2.2  # Asegúrate de usar la última versión disponible
-
+  convert: ^3.1.0 # Para manejar la conversión de hexadecimal a bytes
+  geolocator: ^10.1.0
 
 dev_dependencies:
   flutter_test:
