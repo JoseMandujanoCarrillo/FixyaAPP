@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'payment_methods_screen.dart'; // Asegúrate de tener la importación de la pantalla
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -119,7 +120,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 20),
                     _buildEditableField('Nombre', userName),
                     _buildEditableField('Correo Electrónico', userEmail),
-                    _buildEditableField('Método de Pago', 'Crédito o Débito'),
+                    // Convertir "Método de Pago" a un botón
+                    ElevatedButton(
+                      onPressed: () {
+                        // Navegar a la pantalla de métodos de pago
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PaymentMethodsScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade900,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Método de Pago', style: TextStyle(color: Colors.white)),
+                    ),
                     const SizedBox(height: 10),
                     ElevatedButton(
                       onPressed: () {},

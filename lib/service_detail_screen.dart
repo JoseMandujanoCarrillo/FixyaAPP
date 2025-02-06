@@ -39,7 +39,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                     widget.service['name'] ?? 'Servicio',
                     style: const TextStyle(
                       fontSize: 32,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.normal,
                       color: Colors.blue,
                     ),
                   ),
