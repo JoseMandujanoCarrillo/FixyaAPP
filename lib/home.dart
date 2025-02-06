@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'service_detail_screen.dart'; // Importar la pantalla de detalles
-import 'calendar_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:typed_data';
 import 'package:convert/convert.dart';
-import 'dart:typed_data'; // Para Uint8List
+import 'calendar_screen.dart';
 import 'profile_screen.dart';
-import 'search_screen.dart'; // Importar la pantalla de búsqueda
+import 'search_screen.dart';
+import 'service_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,10 +18,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<dynamic> services = [];
+  List<dynamic> services1 = [];
+  List<dynamic> services2 = [];
   String userName = "Usuario";
-  int _selectedIndex = 0;
   bool _isLoading = true;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -31,84 +33,38 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadData() async {
     await _getUserData();
     await _getServices();
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
   }
 
   Future<void> _getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
-
-    if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usuario no logueado')),
-      );
-      return;
-    }
-
+    if (token == null) return;
     try {
       final response = await http.get(
         Uri.parse('https://apifixya.onrender.com/users/me'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        setState(() {
-          userName = data['name'] ?? 'Usuario';
-          // Guardar los valores en varias variables
-          final int userId = data['id'];
-          final String userEmail = data['email'];
-          final double userLatitude = data['latitude'];
-          final double userLongitude = data['longitude'];
-          final String userCreatedAt = data['created_at'];
-          final String userUpdatedAt = data['updated_at'];
-
-          // Puedes usar estas variables como necesites
-          print('User ID: $userId');
-          print('User Email: $userEmail');
-          print('User Latitude: $userLatitude');
-          print('User Longitude: $userLongitude');
-          print('User Created At: $userCreatedAt');
-          print('User Updated At: $userUpdatedAt');
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Error al obtener los datos del usuario')),
-        );
+        setState(() => userName = data['name'] ?? 'Usuario');
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
+    } catch (_) {}
   }
 
   Future<void> _getServices() async {
     try {
       final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'),
-      );
-
+          Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final allServices = List<dynamic>.from(data['data']);
         setState(() {
-          services = data['data'];
+          services1 = allServices.sublist(0, allServices.length ~/ 2);
+          services2 = allServices.sublist(allServices.length ~/ 2);
         });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al cargar los servicios')),
-        );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
+    } catch (_) {}
   }
 
   void _onItemTapped(int index) {
@@ -132,12 +88,9 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.search, color: Colors.black),
             onPressed: () {
-              // Navegar a la pantalla de búsqueda
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const SearchScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const SearchScreen()),
               );
             },
           ),
@@ -153,20 +106,17 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Colors.white,
+        selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
         backgroundColor: Colors.white,
         showUnselectedLabels: false,
         type: BottomNavigationBarType.fixed,
         items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.home, color: Colors.black), label: ''),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today, color: Colors.black), label: ''),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.menu, color: Colors.black), label: ''),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person, color: Colors.black), label: ''),
+              icon: Icon(Icons.calendar_today), label: 'Calendario'),
+          BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'Menú'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
     );
@@ -186,97 +136,62 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeContent() {
-    // Filtrar servicios con imágenes propias
-    final servicesWithImage = services.where((s) => _hasImage(s)).toList();
-    // Filtrar servicios sin imágenes
-    final servicesWithoutImage = services.where((s) => !_hasImage(s)).toList();
-
-    // Combinar las listas, priorizando los servicios con imágenes
-    final popularServices = [
-      ...servicesWithImage.take(5), // Tomar hasta 5 servicios con imágenes
-      ...servicesWithoutImage.take(5 - servicesWithImage.length), // Completar con servicios sin imágenes si es necesario
-    ].take(5).toList(); // Limitar a 5 servicios en total
-
-    // Filtrar servicios para "Clean Flash" (sin imágenes)
-    final cleanFlashServices = services.where((s) => !_hasImage(s)).toList();
-
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Hola, $userName!',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildServiceList('Servicios populares', popularServices),
-            const SizedBox(height: 24),
-            _buildServiceList('Clean Flash', cleanFlashServices),
-          ],
-        ),
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Hola, $userName!",
+              style:
+                  const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          const Text("Clean Fast",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          _buildHorizontalList(services1),
+          const SizedBox(height: 20),
+          const Text("Populares",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          _buildHorizontalList(services2),
+        ],
       ),
     );
   }
 
-  bool _hasImage(dynamic service) {
-    return (service['imageUrl'] != null && service['imageUrl'].isNotEmpty) ||
-        (service['imagebyte'] != null && service['imagebyte'].isNotEmpty);
-  }
-
-  Widget _buildServiceList(String title, List<dynamic> items) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 240,
-          child: items.isEmpty
-              ? const Center(child: Text('No hay servicios disponibles'))
-              : ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    return _buildServiceCard(items[index]);
-                  },
-                ),
-        ),
-      ],
+  Widget _buildHorizontalList(List<dynamic> services) {
+    return SizedBox(
+      height: 250,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: services.length,
+        itemBuilder: (context, index) {
+          return _buildServiceCard(services[index]);
+        },
+      ),
     );
   }
 
   Widget _buildServiceCard(dynamic service) {
     final imageUrl = service['imageUrl'];
     final imageBytea = service['imagebyte'];
+    final name = service['name'] ?? 'Sin nombre';
+    final price = service['price'] ?? 'Precio no disponible';
+    final description = service['description'] ?? 'Sin descripción';
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                ServiceDetailScreen(service: service), // Uso correcto
-          ),
+              builder: (context) => ServiceDetailScreen(service: service)),
         );
       },
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 4,
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: SizedBox(
-          width: 160,
-          height: 220,
+      child: Container(
+        width: 200,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        child: Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -284,33 +199,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(16)),
                 child: imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
                         height: 120,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Image.network(
-                            'https://i.imgur.com/FlcmJ1h.jpg',
-                            height: 120,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          );
-                        },
+                        placeholder: (context, url) =>
+                            const Center(child: CircularProgressIndicator()),
+                        errorWidget: (context, url, error) =>
+                            const Icon(Icons.broken_image, size: 120),
                       )
                     : imageBytea != null && imageBytea.isNotEmpty
                         ? Image.memory(
                             Uint8List.fromList(hex.decode(imageBytea)),
                             height: 120,
                             width: double.infinity,
-                            fit: BoxFit.cover,
-                          )
-                        : Image.network(
-                            'https://i.imgur.com/FlcmJ1h.jpg',
-                            height: 120,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
+                            fit: BoxFit.cover)
+                        : const Icon(Icons.image, size: 120),
               ),
               Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -318,21 +223,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      service['name'] ?? 'Sin nombre',
+                      name,
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
+                          fontSize: 16, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      service['price'] != null
-                          ? '\$${service['price']}'
-                          : 'Consultar',
+                      price.toString(),
                       style: const TextStyle(
                           fontSize: 14,
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

@@ -17,9 +17,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime? _selectedDay;
   Map<DateTime, List<dynamic>> _events = {};
   bool _isLoading = false;
-  int? _userId; // Variable para almacenar el ID del usuario logueado
+  int? _userId; // ID del usuario logueado
 
-  // NUEVA lista para almacenar las propuestas específicas del usuario
+  // Lista para almacenar las propuestas específicas del usuario
   List<dynamic> _userProposals = [];
 
   @override
@@ -28,7 +28,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadProposals();
   }
 
-  // Cargar todas las propuestas y el ID del usuario
+  // Cargar el usuario y sus propuestas utilizando la ruta /proposals/my
   Future<void> _loadProposals() async {
     setState(() => _isLoading = true);
 
@@ -44,7 +44,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     try {
-      // Obtener los datos del usuario logueado
+      // Obtener datos del usuario logueado
       final userResponse = await http.get(
         Uri.parse('https://apifixya.onrender.com/users/me'),
         headers: {'Authorization': 'Bearer $token'},
@@ -53,30 +53,28 @@ class _CalendarScreenState extends State<CalendarScreen> {
       if (userResponse.statusCode == 200) {
         final userData = json.decode(userResponse.body);
         setState(() {
-          _userId = userData['id']; // Guardar el ID del usuario
+          _userId = userData['id'];
         });
 
-        // Cargar todas las propuestas sin filtrar por user_id
+        // Usar la ruta /proposals/my que devuelve solo las propuestas del usuario
         final response = await http.get(
-          Uri.parse('https://apifixya.onrender.com/proposals'),
+          Uri.parse('https://apifixya.onrender.com/proposals/my'),
           headers: {'Authorization': 'Bearer $token'},
         );
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           setState(() {
+            // Agrupar propuestas por fecha (normalizando la fecha)
             _events = _groupProposalsByDate(data['proposals']);
-
-            // Guardamos solo las propuestas cuyo user_id coincida con el ID del usuario
-            _userProposals = data['proposals']
-                .where((proposal) => proposal['user_id'] == _userId)
-                .toList();
+            // Almacenar propuestas para historial
+            _userProposals = data['proposals'];
           });
         } else {
-          throw Exception('Error al cargar las propuestas: ${response.body}');
+          throw Exception('Error al cargar propuestas: ${response.body}');
         }
       } else {
-        throw Exception('Error al obtener los datos del usuario: ${userResponse.body}');
+        throw Exception('Error al obtener datos del usuario: ${userResponse.body}');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -87,18 +85,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
-  // Agrupar propuestas por fecha
+  // Función para agrupar propuestas por fecha (solo fecha)
   Map<DateTime, List<dynamic>> _groupProposalsByDate(List<dynamic> proposals) {
     final Map<DateTime, List<dynamic>> events = {};
     for (final proposal in proposals) {
       final date = DateTime.parse(proposal['date']).toLocal();
+      // Normalizar la fecha (solo año, mes y día)
       final dateOnly = DateTime(date.year, date.month, date.day);
       events[dateOnly] = (events[dateOnly] ?? [])..add(proposal);
     }
     return events;
   }
 
-  // MÉTODO NUEVO: Navegar a la pantalla de historial (propuestas del usuario)
+  // Navegar a la pantalla de historial (propuestas del usuario)
   void _goToUserProposals() {
     Navigator.push(
       context,
@@ -116,7 +115,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         elevation: 0,
-        // NUEVO: Botón en la AppBar para ver propuestas del usuario
         actions: [
           IconButton(
             icon: const Icon(Icons.list),
@@ -161,9 +159,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           _focusedDay = focusedDay;
                         });
                       },
-                      eventLoader: (day) => _events[day] ?? [],
-                      onFormatChanged: (format) => setState(() => _calendarFormat = format),
-                      onPageChanged: (focusedDay) => _focusedDay = focusedDay,
+                      // Normalizamos la fecha recibida para buscar en el mapa
+                      eventLoader: (day) {
+                        final normalizedDay = DateTime(day.year, day.month, day.day);
+                        return _events[normalizedDay] ?? [];
+                      },
+                      onFormatChanged: (format) =>
+                          setState(() => _calendarFormat = format),
+                      onPageChanged: (focusedDay) =>
+                          _focusedDay = focusedDay,
                       calendarStyle: CalendarStyle(
                         markersAlignment: Alignment.bottomCenter,
                         markersAutoAligned: true,
@@ -196,33 +200,58 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 const SizedBox(height: 16),
                 // Lista de propuestas para la fecha seleccionada
                 Expanded(
-                  child: _selectedDay != null && _events[_selectedDay] != null
-                      ? ListView.builder(
-                          itemCount: _events[_selectedDay]!.length,
-                          itemBuilder: (context, index) {
-                            final proposal = _events[_selectedDay]![index];
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                title: Text(
-                                  proposal['service']['name'] ?? 'Sin nombre',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                  child: _selectedDay != null
+                      ? Builder(builder: (context) {
+                          final normalizedSelectedDay = DateTime(
+                            _selectedDay!.year,
+                            _selectedDay!.month,
+                            _selectedDay!.day,
+                          );
+                          final proposalsForDay =
+                              _events[normalizedSelectedDay] ?? [];
+                          return proposalsForDay.isNotEmpty
+                              ? ListView.builder(
+                                  itemCount: proposalsForDay.length,
+                                  itemBuilder: (context, index) {
+                                    final proposal = proposalsForDay[index];
+                                    return Card(
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      elevation: 2,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ListTile(
+                                        title: Text(
+                                          proposal['service']['name'] ?? 'Sin nombre',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          'Estado: ${proposal['status'] ?? 'Desconocido'}',
+                                        ),
+                                        trailing: const Icon(
+                                          Icons.arrow_forward,
+                                          color: Colors.blue,
+                                        ),
+                                        onTap: () {
+                                          // Navegar a la pantalla de detalles de la propuesta
+                                        },
+                                      ),
+                                    );
+                                  },
+                                )
+                              : const Center(
+                                  child: Text(
+                                    'No hay propuestas para esta fecha',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey,
+                                    ),
                                   ),
-                                ),
-                                subtitle: Text('Estado: ${proposal['status'] ?? 'Desconocido'}'),
-                                trailing: const Icon(Icons.arrow_forward, color: Colors.blue),
-                                onTap: () {
-                                  // Navegar a la pantalla de detalles de la propuesta
-                                },
-                              ),
-                            );
-                          },
-                        )
+                                );
+                        })
                       : const Center(
                           child: Text(
                             'Selecciona una fecha para ver propuestas',
@@ -239,28 +268,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-// NUEVA PANTALLA: Historial de servicio (lista de propuestas del usuario)
+// Pantalla de Historial de Servicio: Lista de propuestas del usuario
 class UserProposalsScreen extends StatelessWidget {
   final List<dynamic> proposals;
 
-  const UserProposalsScreen({Key? key, required this.proposals}) : super(key: key);
+  const UserProposalsScreen({Key? key, required this.proposals})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Agrupamos las propuestas por fecha para mostrarlas como en el ejemplo
+    // Agrupar las propuestas por fecha
     final proposalsByDate = _groupProposalsByDate(proposals);
-    // Ordenamos las fechas de manera ascendente (o desc) según necesites
+    // Ordenar las fechas de manera ascendente
     final sortedDates = proposalsByDate.keys.toList()..sort();
 
     return Scaffold(
+      // FONDO: si deseas un fondo claro o gradiente, ajusta aquí
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Historial de servicio'),
-        // Ícono de ejemplo (papelera) como en la imagen
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+        title: const Text(
+          'Historial de servicio',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete),
+            icon: const Icon(Icons.delete, color: Colors.black),
             onPressed: () {
-              // Acción para borrar o limpiar, si lo necesitas
+              // Acción para borrar o limpiar, si es necesario
             },
           ),
         ],
@@ -270,6 +308,7 @@ class UserProposalsScreen extends StatelessWidget {
               child: Text('No tienes propuestas disponibles'),
             )
           : ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               itemCount: sortedDates.length,
               itemBuilder: (context, index) {
                 final date = sortedDates[index];
@@ -278,18 +317,19 @@ class UserProposalsScreen extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Encabezado de fecha (ej. 'Recientes hoy' o 'Miércoles, 4 de diciembre...')
+                    // Encabezado de fecha (ej: "Recientes hoy" o "Miércoles, 4 de diciembre de 2024")
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         _getDateTitle(date),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
+                          color: Colors.black87,
                         ),
                       ),
                     ),
-                    // Lista de propuestas de ese día
+                    // Lista de propuestas del día
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -297,22 +337,46 @@ class UserProposalsScreen extends StatelessWidget {
                       itemBuilder: (context, i) {
                         final proposal = dayProposals[i];
                         return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          margin: const EdgeInsets.symmetric(vertical: 6),
                           elevation: 2,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: ListTile(
-                            title: Text(
-                              proposal['service']['name'] ?? 'Sin nombre',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
-                            subtitle: Column(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Estado: ${proposal['status'] ?? 'Desconocido'}'),
-                                // Ejemplo de hora fija. Ajusta según tus campos:
-                                const Text('Hora: 12:30 p.m. - 2:10 p.m.'),
+                                // Nombre del servicio
+                                Text(
+                                  proposal['service']['name'] ?? 'Sin nombre',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                // Estado de la propuesta
+                                Text(
+                                  'Estado: ${proposal['status'] ?? 'Desconocido'}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                // Hora (fija a modo de ejemplo)
+                                const Text(
+                                  'Hora: 12:30 p.m. - 2:10 p.m.',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black54,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -326,7 +390,7 @@ class UserProposalsScreen extends StatelessWidget {
     );
   }
 
-  // Reutilizamos la misma lógica de agrupar propuestas por fecha
+  // Agrupar propuestas por fecha
   Map<DateTime, List<dynamic>> _groupProposalsByDate(List<dynamic> proposals) {
     final Map<DateTime, List<dynamic>> events = {};
     for (final proposal in proposals) {
@@ -337,16 +401,13 @@ class UserProposalsScreen extends StatelessWidget {
     return events;
   }
 
-  // Formato de fecha para los encabezados
+  // Formatear la fecha para el encabezado
   String _getDateTitle(DateTime date) {
     final now = DateTime.now();
-    // Si es la fecha de hoy, mostrar 'Recientes hoy'
     if (date.year == now.year && date.month == now.month && date.day == now.day) {
       return 'Recientes hoy';
     }
 
-    // Si no, mostrar con formato estilo 'Miércoles, 4 de diciembre de 2024'
-    // (Se hace manualmente para no requerir paquete intl, puedes adaptarlo)
     final daysOfWeek = [
       'Lunes',
       'Martes',

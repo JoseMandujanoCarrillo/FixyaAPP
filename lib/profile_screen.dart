@@ -13,6 +13,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String userName = "Cargando...";
   String userEmail = "Cargando...";
+  String userImageUrl = ""; // Nueva variable para la imagen del usuario
   bool isLoading = true;
 
   @override
@@ -45,6 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           userName = data['name'] ?? 'Usuario';
           userEmail = data['email'] ?? 'Sin correo';
+          userImageUrl = data['imageUrl'] ?? ""; // Obtener URL de la imagen
           isLoading = false;
         });
       } else {
@@ -95,9 +97,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     CircleAvatar(
                       radius: 50,
-                      backgroundImage: NetworkImage(
-                        'https://via.placeholder.com/150',
-                      ),
+                      backgroundImage: userImageUrl.isNotEmpty
+                          ? NetworkImage(userImageUrl) // Mostrar imagen del usuario
+                          : const NetworkImage('https://via.placeholder.com/150'),
                     ),
                     const SizedBox(height: 10),
                     Text(

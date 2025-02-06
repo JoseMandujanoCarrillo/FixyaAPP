@@ -1,191 +1,150 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:typed_data';
-import 'package:convert/convert.dart'; // Para manejar la conversión de hexadecimal a bytes
+import 'service_form.dart'; // Asegúrate de importar la pantalla correcta
 
-class ServiceDetailScreen extends StatelessWidget {
-  final dynamic service;
+class ServiceDetailScreen extends StatefulWidget {
+  final Map<String, dynamic> service; // Se asegura de que sea un Map con datos del servicio
 
   const ServiceDetailScreen({super.key, required this.service});
 
   @override
+  _ServiceDetailScreenState createState() => _ServiceDetailScreenState();
+}
+
+class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
+  bool isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(service['name'] ?? 'Detalles del servicio'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.menu), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Imagen del servicio
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: service['imageUrl'] != null && service['imageUrl'].isNotEmpty
-                  ? Image.network(
-                      service['imageUrl'],
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Image.network(
-                          'https://i.imgur.com/FlcmJ1h.jpg',
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        );
-                      },
-                    )
-                  : service['imagebyte'] != null && service['imagebyte'].isNotEmpty
-                      ? Image.memory(
-                          Uint8List.fromList(hex.decode(service['imagebyte'])),
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.network(
-                          'https://i.imgur.com/FlcmJ1h.jpg',
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 40),
+              Row(
+                children: [
+                  const Icon(Icons.cleaning_services, size: 40, color: Colors.blue),
+                  const SizedBox(width: 10),
+                  Text(
+                    widget.service['name'] ?? 'Servicio',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Servicio a solicitar',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    isExpanded = !isExpanded;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  height: isExpanded ? null : 100,
+                  child: Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 5,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  widget.service['imageUrl'] ?? '',
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.service['name'] ?? 'Limpieza',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      widget.service['description'] ?? 'Descripción del servicio',
+                                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                                      maxLines: isExpanded ? null : 2,
+                                      overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (isExpanded) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Precio: ${widget.service['price'] ?? '1,110 MXM'}'),
+                                Text('Horario: ${widget.service['schedule'] ?? '8:00am - 6:00pm'}'),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white, elevation: 2),
+                    child: const Text('CANCELAR', style: TextStyle(color: Colors.black)),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ServiceFormScreen(service: widget.service),
                         ),
-            ),
-            const SizedBox(height: 16),
-
-            // Título del servicio
-            Text(
-              service['name'] ?? 'Sin nombre',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Precio del servicio
-            Text(
-              service['price'] != null ? '\$${service['price']}' : 'Consultar',
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Descripción del servicio
-            const Text(
-              '¿Tu habitación necesita una limpieza urgente? ¡No te preocupes! Estoy aquí para ofrecerte una solución rápida y efectiva.',
-              style: TextStyle(
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Horario del servicio
-            const Text(
-              'Horario:',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Lunes a Viernes: 7:00 a.m - 7:30 p.m\nSábado y Domingo: 9:00 a.m - 8:30 p.m',
-              style: TextStyle(
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Calificaciones de otros usuarios
-            const Text(
-              'Calificación por otros usuarios:',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildUserReview('User1', 'El servicio fue de la mejor y la persona fue muy amable.'),
-            _buildUserReview('User2', 'No fue del todo satisfactorio, el personal llegó tarde y no hizo bien el trabajo.'),
-            const SizedBox(height: 16),
-
-            // Botones de acción
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    // Acción para cancelar
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      );
+                    },
+                    child: const Text('SOLICITAR'),
                   ),
-                  child: const Text(
-                    'CANCELAR',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    // Acción para solicitar
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  ),
-                  child: const Text(
-                    'SOLICITAR',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  // Widget para mostrar una reseña de usuario
-  Widget _buildUserReview(String user, String review) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            user,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            review,
-            style: const TextStyle(
-              fontSize: 14,
-            ),
-          ),
-        ],
       ),
     );
   }
