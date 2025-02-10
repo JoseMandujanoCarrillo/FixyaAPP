@@ -33,7 +33,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               const SizedBox(height: 40),
               Row(
                 children: [
-                  const Icon(Icons.cleaning_services, size: 40, color: Colors.blue),
+                  const Icon(Icons.cleaning_services, size: 20, color: Colors.blue),
                   const SizedBox(width: 10),
                   Text(
                     widget.service['name'] ?? 'Servicio',

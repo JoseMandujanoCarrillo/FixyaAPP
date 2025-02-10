@@ -69,10 +69,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.credit_card, size: 40),
-                    title: Text(card['cardholderName'] ?? 'Sin nombre'),
+                    title: Text(card['cardholder_name'] ?? 'Sin nombre'),
                     subtitle: Text(
                         '**** **** **** ${card['cardNumber']?.substring(15) ?? ''}'),
-                    trailing: Text('Expira: ${card['expirationDate'] ?? ''}'),
+                    trailing: Text('Expira: ${card['expiration_date'] ?? ''}'),
                   ),
                 );
               },
