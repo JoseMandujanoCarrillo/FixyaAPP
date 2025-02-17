@@ -2,15 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
-/// Función auxiliar para formatear un DateTime e incluir el offset de la zona horaria.
-String formatDateTimeWithTimezone(DateTime dateTime) {
-  final offset = dateTime.timeZoneOffset;
-  final sign = offset.isNegative ? '-' : '+';
-  final hours = offset.inHours.abs().toString().padLeft(2, '0');
-  final minutes = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
-  return '${dateTime.toIso8601String()}$sign$hours:$minutes';
-}
+import 'location_selection_screen.dart';
+import 'add_card_screen.dart'; // Asegúrate de que la ruta sea la correcta
 
 /// Pantalla para llenar los datos iniciales del servicio.
 class ServiceFormScreen extends StatefulWidget {
@@ -26,7 +19,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _timeController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _tipoServicioController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   DateTime? _selectedDate; // Guarda la fecha seleccionada
 
@@ -35,21 +28,31 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     _dateController.dispose();
     _timeController.dispose();
     _addressController.dispose();
-    _tipoServicioController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue.shade100,
+      // AppBar con flecha para volver a la pantalla anterior
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Servicio'),
+      ),
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 40),
             _buildServiceCard(),
             const SizedBox(height: 15),
-            _buildForm(),
+            Form(
+              key: _formKey,
+              child: _buildForm(),
+            ),
             const SizedBox(height: 20),
             _buildNextButton(context),
           ],
@@ -60,6 +63,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
 
   Widget _buildServiceCard() {
     return Card(
+      color: const Color(0xFF94D6FF), // Azul insignia
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 3,
       margin: const EdgeInsets.all(16),
@@ -70,26 +74,33 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           children: [
             Text(
               widget.service['name'] ?? 'Servicio limpieza',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blue),
+              style: const TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             const SizedBox(height: 5),
             Text(
-              widget.service['address'] ?? 'C. 111 315, Santa Rosa, 97279 Mérida, Yuc.',
-              style: const TextStyle(fontSize: 14, color: Colors.black54),
+              widget.service['address'] ??
+                  'C. 111 315, Santa Rosa, 97279 Mérida, Yuc.',
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
             ),
             const SizedBox(height: 10),
             Row(
               children: [
                 Text(
                   '\$${widget.service['price'] ?? 'XXXXX'}',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green),
                 ),
-                const Text(' aprox', style: TextStyle(fontSize: 14, color: Colors.green)),
+                const Text(' aprox',
+                    style: TextStyle(fontSize: 14, color: Colors.green)),
                 const Spacer(),
                 const CircleAvatar(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: Colors.white,
                   radius: 25,
-                  child: Icon(Icons.person, color: Colors.white, size: 30),
+                  child: Icon(Icons.person,
+                      color: Color(0xFF94D6FF), size: 30),
                 ),
               ],
             ),
@@ -101,6 +112,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
 
   Widget _buildForm() {
     return Card(
+      color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 3,
       margin: const EdgeInsets.all(16),
@@ -114,16 +126,19 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            // Campo para el tipo de servicio.
+            // Muestra el nombre del servicio (no editable)
             Padding(
               padding: const EdgeInsets.only(bottom: 15),
-              child: TextField(
-                controller: _tipoServicioController,
-                decoration: InputDecoration(
-                  hintText: 'Selecciona un tipo de servicio',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  filled: true,
-                  fillColor: Colors.grey.shade200,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  widget.service['name'] ?? 'Servicio sin nombre',
+                  style: const TextStyle(fontSize: 16),
                 ),
               ),
             ),
@@ -139,7 +154,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   Widget _buildDateField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
+      child: TextFormField(
         controller: _dateController,
         readOnly: true,
         decoration: InputDecoration(
@@ -147,20 +162,30 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon: const Icon(Icons.calendar_today, color: Colors.blue),
+          suffixIcon:
+              const Icon(Icons.calendar_today, color: Color(0xFF01497C)),
         ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Selecciona una fecha';
+          }
+          return null;
+        },
         onTap: () async {
+          final today = DateTime.now();
+          final firstDate = DateTime(today.year, today.month, today.day);
           DateTime? pickedDate = await showDatePicker(
             context: context,
-            initialDate: DateTime.now(),
-            firstDate: DateTime(2022),
+            initialDate: today,
+            firstDate: firstDate,
             lastDate: DateTime(2030),
           );
           if (pickedDate != null) {
             setState(() {
               _selectedDate = pickedDate;
-              // Formateamos la fecha en formato dd/MM/yyyy para mostrarla.
-              _dateController.text = "${pickedDate.day}/${pickedDate.month}/${pickedDate.year}";
+              _dateController.text =
+                  "${pickedDate.day}/${pickedDate.month}/${pickedDate.year}";
+              _timeController.clear();
             });
           }
         },
@@ -171,25 +196,56 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   Widget _buildTimeField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
+      child: TextFormField(
         controller: _timeController,
         readOnly: true,
         decoration: InputDecoration(
-          hintText: 'HH/MM/SS',
+          hintText: 'HH:MM:SS',
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon: const Icon(Icons.access_time, color: Colors.blue),
+          suffixIcon:
+              const Icon(Icons.access_time, color: Color(0xFF01497C)),
         ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Selecciona una hora';
+          }
+          return null;
+        },
         onTap: () async {
+          if (_selectedDate == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Selecciona primero una fecha")),
+            );
+            return;
+          }
           TimeOfDay? pickedTime = await showTimePicker(
             context: context,
             initialTime: TimeOfDay.now(),
           );
           if (pickedTime != null) {
+            final now = DateTime.now();
+            if (_selectedDate!.year == now.year &&
+                _selectedDate!.month == now.month &&
+                _selectedDate!.day == now.day) {
+              final selectedDateTime = DateTime(
+                _selectedDate!.year,
+                _selectedDate!.month,
+                _selectedDate!.day,
+                pickedTime.hour,
+                pickedTime.minute,
+              );
+              if (selectedDateTime.isBefore(now)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("La hora seleccionada ya pasó")),
+                );
+                return;
+              }
+            }
             setState(() {
-              // Formateamos la hora en formato "HH:MM:SS"
-              _timeController.text = "${pickedTime.hour}:${pickedTime.minute}:00";
+              _timeController.text =
+                  "${pickedTime.hour}:${pickedTime.minute}:00";
             });
           }
         },
@@ -200,7 +256,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   Widget _buildAddressField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
+      child: TextFormField(
         controller: _addressController,
         readOnly: true,
         decoration: InputDecoration(
@@ -208,13 +264,19 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon: const Icon(Icons.map, color: Colors.blue),
+          suffixIcon: const Icon(Icons.map, color: Color(0xFF01497C)),
         ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Selecciona una ubicación';
+          }
+          return null;
+        },
         onTap: () async {
-          // Navegar a la pantalla de selección de ubicación.
           final selectedAddress = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const MapSelectionScreen()),
+            MaterialPageRoute(
+                builder: (context) => const LocationSelectionScreen()),
           );
           if (selectedAddress != null) {
             setState(() {
@@ -233,51 +295,31 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         width: double.infinity,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue.shade900,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+            backgroundColor: const Color(0xFF01497C),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
           onPressed: () {
-            // Validamos que se haya seleccionado fecha y hora
-            if (_selectedDate != null && _timeController.text.isNotEmpty) {
-              // Separamos las partes de la hora (se asume formato "HH:MM:SS")
-              final timeParts = _timeController.text.split(':');
-              final hour = int.tryParse(timeParts[0]) ?? 0;
-              final minute = int.tryParse(timeParts[1]) ?? 0;
-              final second = timeParts.length > 2 ? int.tryParse(timeParts[2]) ?? 0 : 0;
-              
-              // Combinamos la fecha y la hora en un único objeto DateTime en hora local.
-              final combinedDateTime = DateTime(
-                _selectedDate!.year,
-                _selectedDate!.month,
-                _selectedDate!.day,
-                hour,
-                minute,
-                second,
-              );
-              
-              // Formateamos el DateTime incluyendo la zona horaria.
-              final formattedDateTime = formatDateTimeWithTimezone(combinedDateTime);
-              
+            if (_formKey.currentState?.validate() ?? false) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => AdditionalQuestionsScreen(
                     service: widget.service,
-                    date: formattedDateTime,
+                    date: _selectedDate != null
+                        ? _selectedDate!.toIso8601String()
+                        : '',
                     time: _timeController.text,
                     direccion: _addressController.text,
-                    tipodeservicio: _tipoServicioController.text,
+                    tipodeservicio: widget.service['name'],
                   ),
                 ),
               );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Debes seleccionar fecha y hora')),
-              );
             }
           },
-          child: const Text('Siguiente', style: TextStyle(fontSize: 16, color: Colors.white)),
+          child: const Text('Siguiente',
+              style: TextStyle(fontSize: 16, color: Colors.white)),
         ),
       ),
     );
@@ -302,14 +344,19 @@ class AdditionalQuestionsScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<AdditionalQuestionsScreen> createState() => _AdditionalQuestionsScreenState();
+  State<AdditionalQuestionsScreen> createState() =>
+      _AdditionalQuestionsScreenState();
 }
 
 class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   bool? _usuarioEnCasa;
+  bool? _servicioConstante;
   List<dynamic> _creditCards = [];
-  dynamic _selectedCreditCard; // Puede ser el Map completo o solo el id, según convenga.
-  final TextEditingController _additionalDescriptionController = TextEditingController();
+  dynamic _selectedCreditCard;
+  final TextEditingController _additionalDescriptionController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -323,12 +370,11 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
     super.dispose();
   }
 
-  /// Recupera las tarjetas del usuario logueado usando el token almacenado.
   Future<void> _fetchCreditCards() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
+
       final response = await http.get(
         Uri.parse('https://apifixya.onrender.com/creditcards/user'),
         headers: {
@@ -336,14 +382,16 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
           'Authorization': 'Bearer $token',
         },
       );
-      
+
       if (response.statusCode == 200) {
         setState(() {
           _creditCards = jsonDecode(response.body);
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al obtener las tarjetas: ${response.statusCode}')),
+          SnackBar(
+              content:
+                  Text('Error al obtener las tarjetas: ${response.statusCode}')),
         );
       }
     } catch (e) {
@@ -353,24 +401,33 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
     }
   }
 
-  /// Envía la propuesta usando el token y el userId real almacenado en SharedPreferences.
+  /// Envía la propuesta usando el token y la id del usuario actualmente logueado.
   Future<void> _submitProposal() async {
+    if (!(_formKey.currentState?.validate() ?? false) ||
+        _usuarioEnCasa == null ||
+        _servicioConstante == null ||
+        _selectedCreditCard == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Todos los campos son obligatorios")),
+      );
+      return;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      // Se asume que el endpoint de login guardó el userId en SharedPreferences.
+      // Se asume que el endpoint de login guardó la id del usuario actual en SharedPreferences.
       final userId = prefs.getInt('userId') ?? 0;
-      
+
       final proposalData = {
         "serviceId": widget.service['id'] ?? 0,
         "userId": userId,
-        // Usamos la fecha que se envió desde ServiceFormScreen.
-        "date": widget.date.isNotEmpty ? widget.date : DateTime.now().toIso8601String(),
-        "status": "pending", // Siempre pendiente al crear la propuesta.
+        "date": widget.date,
+        "status": "pending",
         "direccion": widget.direccion,
-        "cardId": _selectedCreditCard != null ? _selectedCreditCard['id'] : null,
+        "cardId": _selectedCreditCard['id'],
         "Descripcion": _additionalDescriptionController.text,
         "UsuarioEnCasa": _usuarioEnCasa,
+        "servicioConstante": _servicioConstante,
         "tipodeservicio": widget.tipodeservicio,
       };
 
@@ -388,7 +445,7 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Propuesta creada correctamente')),
           );
-          Navigator.popUntil(context, (route) => route.isFirst);
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
         }
       } else {
         if (mounted) {
@@ -408,7 +465,30 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
 
   Widget _buildCreditCardDropdown() {
     if (_creditCards.isEmpty) {
-      return const Text('Cargando tarjetas...');
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('No tienes tarjetas guardadas.'),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF01497C),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25)),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddCardScreen()),
+              );
+              _fetchCreditCards();
+            },
+            child: const Text('Agregar Tarjeta',
+                style: TextStyle(fontSize: 16, color: Colors.white)),
+          ),
+        ],
+      );
     }
 
     return DropdownButtonFormField<dynamic>(
@@ -422,9 +502,15 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
       items: _creditCards.map<DropdownMenuItem<dynamic>>((card) {
         return DropdownMenuItem<dynamic>(
           value: card,
-          child: Text(card['cardNumber'] ?? 'Tarjeta ${card['id']}'),
+          child: Text(card['nickname'] ?? 'Tarjeta ${card['id']}'),
         );
       }).toList(),
+      validator: (value) {
+        if (value == null) {
+          return 'Seleccione un método de pago';
+        }
+        return null;
+      },
       onChanged: (value) {
         setState(() {
           _selectedCreditCard = value;
@@ -436,7 +522,7 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
   Widget _buildTextField(TextEditingController controller, String hint) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
+      child: TextFormField(
         controller: controller,
         decoration: InputDecoration(
           hintText: hint,
@@ -444,6 +530,12 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
           filled: true,
           fillColor: Colors.grey.shade200,
         ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Este campo es obligatorio';
+          }
+          return null;
+        },
       ),
     );
   }
@@ -451,81 +543,119 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue.shade100,
+      // AppBar con flecha para volver a la pantalla anterior
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Últimos pasos'),
+      ),
+      backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-              const Text('Últimos pasos', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              const Text('Al momento de realizar el servicio, ¿se encontrará en la ubicación?'),
-              Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<bool>(
-                      value: true,
-                      groupValue: _usuarioEnCasa,
-                      onChanged: (bool? value) {
-                        setState(() {
-                          _usuarioEnCasa = value;
-                        });
-                      },
-                      title: const Text("Sí"),
-                    ),
-                  ),
-                  Expanded(
-                    child: RadioListTile<bool>(
-                      value: false,
-                      groupValue: _usuarioEnCasa,
-                      onChanged: (bool? value) {
-                        setState(() {
-                          _usuarioEnCasa = value;
-                        });
-                      },
-                      title: const Text("No"),
-                    ),
-                  ),
-                ],
+          child: Form(
+            key: _formKey,
+            child: Card(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
               ),
-              const SizedBox(height: 10),
-              _buildCreditCardDropdown(),
-              const SizedBox(height: 10),
-              _buildTextField(_additionalDescriptionController, 'Describe algo adicional al formulario'),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _submitProposal,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade900),
-                child: const Text('Solicitar', style: TextStyle(color: Colors.white)),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 40),
+                    const Text('Últimos pasos',
+                        style:
+                            TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    const Text(
+                        'Al momento de realizar el servicio, ¿se encontrará en la ubicación?'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            value: true,
+                            groupValue: _usuarioEnCasa,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _usuarioEnCasa = value;
+                              });
+                            },
+                            title: const Text("Sí"),
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            value: false,
+                            groupValue: _usuarioEnCasa,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _usuarioEnCasa = value;
+                              });
+                            },
+                            title: const Text("No"),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('¿Será un servicio constante?'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            value: true,
+                            groupValue: _servicioConstante,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _servicioConstante = value;
+                              });
+                            },
+                            title: const Text("Sí"),
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            value: false,
+                            groupValue: _servicioConstante,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _servicioConstante = value;
+                              });
+                            },
+                            title: const Text("No"),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _buildCreditCardDropdown(),
+                    const SizedBox(height: 10),
+                    _buildTextField(_additionalDescriptionController,
+                        'Describe algo adicional al formulario'),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF01497C),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: _submitProposal,
+                      child: const Text('Solicitar',
+                          style:
+                              TextStyle(fontSize: 16, color: Colors.white)),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Pantalla dummy para seleccionar una ubicación.
-/// Reemplaza esta pantalla con la implementación real de selección de mapas.
-class MapSelectionScreen extends StatelessWidget {
-  const MapSelectionScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Seleccionar Ubicación'),
-      ),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            // Retorna una ubicación de ejemplo.
-            Navigator.pop(context, 'Ubicación Seleccionada');
-          },
-          child: const Text('Seleccionar Ubicación'),
         ),
       ),
     );

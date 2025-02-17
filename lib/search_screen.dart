@@ -97,7 +97,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Buscar Servicios'),
-        backgroundColor: Colors.blue,
+        backgroundColor: Color.fromARGB(255, 148, 214, 255),
         foregroundColor: Colors.white,
         elevation: 0,
       ),

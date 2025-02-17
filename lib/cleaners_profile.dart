@@ -4,19 +4,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'payment_methods_screen.dart'; // Asegúrate de tener esta pantalla
 
-// ====================== Pantalla de Perfil ======================
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+// ====================== Pantalla de Perfil del Cleaner ======================
+class CleanersProfile extends StatefulWidget {
+  const CleanersProfile({Key? key}) : super(key: key);
 
   @override
-  _ProfileScreenState createState() => _ProfileScreenState();
+  _CleanersProfileState createState() => _CleanersProfileState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  int? userId; // Se guardará el id del usuario obtenido desde /users/me
+class _CleanersProfileState extends State<CleanersProfile> {
+  int? userId; // Se guardará el id del cleaner obtenido desde /cleaners/me
   String userName = "Cargando...";
   String userEmail = "Cargando...";
   String userImageUrl = "";
+  String latitude = "";
+  String longitude = "";
   bool isLoading = true;
 
   @override
@@ -25,7 +27,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _getUserData();
   }
 
-  /// Obtiene los datos actuales del usuario desde la API y guarda el id.
+  /// Obtiene los datos actuales del cleaner desde la API y guarda el id.
   Future<void> _getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -38,7 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/users/me'),
+        Uri.parse('https://apifixya.onrender.com/cleaners/me'),
         headers: {
           'Authorization': 'Bearer $token',
           'accept': '*/*',
@@ -51,13 +53,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           userId = data['id'];
           userName = data['name'] ?? 'Usuario';
           userEmail = data['email'] ?? 'Sin correo';
-          // En la API se usa "image_url"
+          // Si la API no retorna imagen, se usará una cadena vacía
           userImageUrl = data['image_url'] ?? "";
+          // Extraemos la latitud y longitud, en caso de que existan
+          latitude = data['latitude'] != null ? data['latitude'].toString() : '';
+          longitude = data['longitude'] != null ? data['longitude'].toString() : '';
           isLoading = false;
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al obtener los datos del usuario')),
+          const SnackBar(content: Text('Error al obtener los datos del cleaner')),
         );
         setState(() {
           isLoading = false;
@@ -76,7 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _updateUserFieldOnApi(String field, String newValue) async {
     if (userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo obtener el id del usuario')));
+          const SnackBar(content: Text('No se pudo obtener el id del cleaner')));
       return;
     }
 
@@ -93,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final response = await http.put(
-        Uri.parse('https://apifixya.onrender.com/users/$userId'),
+        Uri.parse('https://apifixya.onrender.com/cleaners/$userId'),
         headers: {
           'Content-Type': 'application/json',
           'accept': '*/*',
@@ -104,7 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Usuario actualizado')),
+          const SnackBar(content: Text('Cleaner actualizado')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -142,6 +147,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         } else if (label == 'Imagen') {
           userImageUrl = updatedValue;
           fieldToUpdate = "image_url";
+        } else if (label == 'Latitud') {
+          latitude = updatedValue;
+          fieldToUpdate = "latitude";
+        } else if (label == 'Longitud') {
+          longitude = updatedValue;
+          fieldToUpdate = "longitude";
         }
       });
       // Actualiza en la API solo el campo modificado.
@@ -168,12 +179,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Función para cerrar sesión: elimina datos del usuario y redirige a Login.
+  /// Función para cerrar sesión: elimina datos del cleaner y redirige a Login.
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('userId');
-    // Agrega aquí la eliminación de cualquier otro dato de sesión si es necesario.
+    // Redirige a la pantalla de login. Asegúrate de tener definida la ruta '/login'
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
@@ -208,7 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Avatar con botón para editar la imagen
+                            // Avatar con botón para editar la imagen (usa placeholder si no hay imagen)
                             Stack(
                               children: [
                                 CircleAvatar(
@@ -234,6 +245,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // Se muestran los campos editables
                             _buildEditableRow('Nombre', userName),
                             _buildEditableRow('Correo Electrónico', userEmail),
+                            _buildEditableRow('Latitud', latitude),
+                            _buildEditableRow('Longitud', longitude),
                             const SizedBox(height: 10),
                             // Botón para métodos de pago:
                             ElevatedButton(
@@ -241,8 +254,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) =>
-                                        PaymentMethodsScreen(),
+                                    builder: (context) => PaymentMethodsScreen(),
                                   ),
                                 );
                               },

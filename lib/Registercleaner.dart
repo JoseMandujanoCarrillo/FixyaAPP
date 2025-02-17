@@ -1,32 +1,30 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:io'; // Para manejar excepciones de conexión
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+class RegisterCleanerScreen extends StatefulWidget {
+  const RegisterCleanerScreen({Key? key}) : super(key: key);
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  _RegisterCleanerScreenState createState() => _RegisterCleanerScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
+class _RegisterCleanerScreenState extends State<RegisterCleanerScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController =
-      TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
 
   bool isLoading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
-  // Método de registro
-  Future<void> register() async {
+  Future<void> registerCleaner() async {
+    // Valida el formulario
     if (!_formKey.currentState!.validate()) return;
+
+    // Validar que ambas contraseñas coincidan (además de lo que valida el validator)
     if (passwordController.text != confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Las contraseñas no coinciden')),
@@ -38,129 +36,99 @@ class _RegisterScreenState extends State<RegisterScreen> {
       isLoading = true;
     });
 
-    // Mostrar diálogo de carga
+    // Mostrar un diálogo de carga
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          const Center(child: CircularProgressIndicator()),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
-      // Verificar si ya existe un cleaner con ese email
-      final email = emailController.text.trim();
-      final existsUrl = Uri.parse(
-          'https://apifixya.onrender.com/cleaners/exists?email=$email');
-      final existsResponse = await http.get(existsUrl);
-
-      if (existsResponse.statusCode == 200) {
-        final existsData = json.decode(existsResponse.body);
-        if (existsData['exists'] == true) {
-          Navigator.pop(context); // Cerrar el diálogo de carga
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content:
-                    Text('El correo ya está registrado como cleaner.')),
-          );
-          setState(() {
-            isLoading = false;
-          });
-          return;
-        }
-      } else {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'Fallo en la API al verificar el correo: ${existsResponse.body}')),
-        );
-        setState(() {
-          isLoading = false;
-        });
-        return;
-      }
-
-      // Paso 1: Registrar el usuario
+      // Registrar al cleaner
       final registerUrl =
-          Uri.parse('https://apifixya.onrender.com/users/register');
+          Uri.parse('https://apifixya.onrender.com/cleaners/register');
       final registerResponse = await http.post(
         registerUrl,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'name': nameController.text,
-          'email': email,
+          'email': emailController.text.trim(),
           'password': passwordController.text,
+          'latitude': 0.0,
+          'longitude': 0.0,
         }),
       );
 
-      // Cerrar el diálogo de carga
-      Navigator.pop(context);
+      Navigator.pop(context); // Cerrar el diálogo de carga
 
       if (registerResponse.statusCode == 201) {
-        // Registro exitoso, se agrega un pequeño retraso si se requiere
-        await Future.delayed(const Duration(seconds: 2));
-
-        // Paso 2: Iniciar sesión para obtener el token
+        // Registro exitoso, proceder a loguearse como cleaner
         final loginUrl =
-            Uri.parse('https://apifixya.onrender.com/users/login');
+            Uri.parse('https://apifixya.onrender.com/cleaners/login');
         final loginResponse = await http.post(
           loginUrl,
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
-            'email': email,
+            'email': emailController.text.trim(),
             'password': passwordController.text,
           }),
         );
 
         if (loginResponse.statusCode == 200) {
           final loginData = json.decode(loginResponse.body);
-          final String userToken = loginData['token'];
+          final String cleanerToken = loginData['token'];
 
-          // Paso 3: Obtener los datos del usuario
-          final userUrl =
-              Uri.parse('https://apifixya.onrender.com/users/me');
-          final userResponse = await http.get(
-            userUrl,
-            headers: {'Authorization': 'Bearer $userToken'},
+          // Obtener datos del cleaner
+          final meUrl = Uri.parse('https://apifixya.onrender.com/cleaners/me');
+          final meResponse = await http.get(
+            meUrl,
+            headers: {'Authorization': 'Bearer $cleanerToken'},
           );
 
-          if (userResponse.statusCode == 200) {
-            final userData = json.decode(userResponse.body);
-
-            // Guardar el token y los datos del usuario en SharedPreferences
+          if (meResponse.statusCode == 200) {
+            final cleanerData = json.decode(meResponse.body);
             final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('token', userToken);
-            await prefs.setInt('userId', userData['id']);
-            await prefs.setString('userName', userData['name']);
+            await prefs.setString('token', cleanerToken);
+            await prefs.setInt('cleanerId', cleanerData['id']);
+            await prefs.setString('cleanerName', cleanerData['name']);
 
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Registro y login exitosos')),
+              const SnackBar(
+                content: Text('Registro e inicio de sesión como cleaner exitoso'),
+              ),
             );
-            Navigator.pushReplacementNamed(context, '/home');
+            Navigator.pushReplacementNamed(context, '/cleanershome');
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(
-                      'Fallo en la API al obtener datos del usuario: ${userResponse.body}')),
+                content: Text(
+                    'Fallo en la API al obtener datos del cleaner: ${meResponse.body}'),
+              ),
             );
-            Navigator.pushReplacementNamed(context, '/home');
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(
-                    'Fallo en la API al iniciar sesión: ${loginResponse.body}')),
+              content: Text(
+                  'Fallo en la API al iniciar sesión como cleaner: ${loginResponse.body}'),
+            ),
           );
         }
+      } else if (registerResponse.statusCode == 409) {
+        // Asumimos que el 409 indica que el usuario ya está registrado
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Usuario ya registrado')),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  'Fallo en la API al registrar: ${registerResponse.body}')),
+            content: Text(
+                'Fallo en la API al registrar: ${registerResponse.body}'),
+          ),
         );
       }
     } on SocketException {
-      Navigator.pop(context);
+      Navigator.pop(context); // Cerrar el diálogo de carga en caso de error
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sin conexión a internet')),
       );
@@ -176,8 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // Decoración común para los campos de entrada, con opción de suffixIcon
-  InputDecoration _inputDecoration(String label, {Widget? suffixIcon}) {
+  InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(color: Colors.grey),
@@ -190,19 +157,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         borderSide:
             const BorderSide(color: Color.fromARGB(255, 148, 214, 255)),
       ),
-      suffixIcon: suffixIcon,
     );
   }
 
   // Validator para el correo electrónico
   String? _validateEmail(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Por favor ingresa tu correo electrónico';
+      return 'Por favor ingresa un correo electrónico';
     }
     final RegExp emailRegex =
         RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$");
     if (!emailRegex.hasMatch(value.trim())) {
-      return 'Por favor ingresa un correo válido';
+      return 'Por favor ingresa un correo electrónico válido';
     }
     return null;
   }
@@ -217,11 +183,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // Validator para la contraseña
   String? _validatePassword(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Por favor ingresa tu contraseña';
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingresa una contraseña';
     }
-    if (value.trim().length < 6) {
+    if (value.length < 6) {
       return 'La contraseña debe tener al menos 6 caracteres';
+    }
+    return null;
+  }
+
+  // Validator para confirmar la contraseña
+  String? _validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor confirma tu contraseña';
+    }
+    if (value != passwordController.text) {
+      return 'Las contraseñas no coinciden';
     }
     return null;
   }
@@ -232,7 +209,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Encabezado con logo y nombre de la aplicación
             Container(
@@ -263,7 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // Formulario de registro con validadores
+            // Formulario de registro de cleaner con validadores
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Form(
@@ -272,7 +248,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Regístrate en What clean',
+                      'Regístrate como Cleaner',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -280,67 +256,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
-                      'What clean quiere tener una mayor seguridad para sus usuarios, por eso queremos que crees una cuenta para disfrutar los beneficios.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 20),
-                    // Campo de correo electrónico
                     TextFormField(
                       controller: emailController,
-                      decoration:
-                          _inputDecoration('Ingresa tu correo electrónico'),
+                      decoration: _inputDecoration('Correo electrónico'),
                       keyboardType: TextInputType.emailAddress,
                       validator: _validateEmail,
                     ),
                     const SizedBox(height: 20),
-                    // Campo de nombre de usuario
                     TextFormField(
                       controller: nameController,
-                      decoration:
-                          _inputDecoration('Ingresa tu nombre de usuario'),
+                      decoration: _inputDecoration('Nombre de usuario'),
                       validator: _validateName,
                     ),
                     const SizedBox(height: 20),
-                    // Campo de contraseña
                     TextFormField(
                       controller: passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: _inputDecoration(
-                        'Ingresa tu contraseña',
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
+                      decoration: _inputDecoration('Contraseña'),
+                      obscureText: true,
                       validator: _validatePassword,
                     ),
                     const SizedBox(height: 20),
-                    // Campo de confirmar contraseña
                     TextFormField(
                       controller: confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      decoration: _inputDecoration(
-                        'Confirma tu contraseña',
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscureConfirmPassword
-                              ? Icons.visibility_off
-                              : Icons.visibility),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword =
-                                  !_obscureConfirmPassword;
-                            });
-                          },
-                        ),
-                      ),
-                      validator: _validatePassword,
+                      decoration: _inputDecoration('Confirmar contraseña'),
+                      obscureText: true,
+                      validator: _validateConfirmPassword,
                     ),
                     const SizedBox(height: 30),
                     // Botón de registro
@@ -351,14 +291,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           backgroundColor:
                               const Color.fromARGB(255, 0, 184, 255),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                              borderRadius: BorderRadius.circular(10)),
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
-                        onPressed: isLoading ? null : register,
+                        onPressed: isLoading ? null : registerCleaner,
                         child: isLoading
                             ? const CircularProgressIndicator(
-                                color: Colors.white)
+                                color: Colors.white,
+                              )
                             : const Text(
                                 'Registrarse',
                                 style: TextStyle(
@@ -367,7 +307,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    // Enlace para redirigir a la pantalla de inicio de sesión
                     Center(
                       child: TextButton(
                         onPressed: () {

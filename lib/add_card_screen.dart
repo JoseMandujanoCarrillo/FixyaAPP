@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+// Se utiliza el paquete mask_text_input_formatter para formatear la fecha.
+// Agrega en tu pubspec.yaml: mask_text_input_formatter: ^2.0.0
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 class AddCardScreen extends StatefulWidget {
   const AddCardScreen({super.key});
@@ -19,11 +23,18 @@ class _AddCardScreenState extends State<AddCardScreen> {
   final TextEditingController _nicknameController = TextEditingController();
   final TextEditingController _billingAddressController = TextEditingController();
   final TextEditingController _creditLimitController = TextEditingController();
-  String _selectedCardType = 'Crédito';
-  String _currency = 'USD';  // Puedes cambiar esto según sea necesario
-  bool _isSaving = false;  // Variable para controlar el estado del botón
 
-  // Validación del número de tarjeta
+  String _selectedCardType = 'Crédito';
+  String _currency = 'USD'; // Puedes cambiar esto según sea necesario
+  bool _isSaving = false; // Controla el estado del botón
+
+  // Formatter para la fecha de expiración: inserta automáticamente el "/"
+  final _expDateFormatter = MaskTextInputFormatter(
+    mask: '##/##',
+    filter: { "#": RegExp(r'\d') },
+  );
+
+  // Validación del número de tarjeta: permite solo 16 dígitos
   String? _validateCardNumber(String? value) {
     if (value == null || value.isEmpty) {
       return 'Campo requerido';
@@ -35,7 +46,7 @@ class _AddCardScreenState extends State<AddCardScreen> {
     return null;
   }
 
-  // Validación de la fecha de expiración
+  // Validación de la fecha de expiración en formato MM/YY
   String? _validateExpirationDate(String? value) {
     if (value == null || value.isEmpty) {
       return 'Campo requerido';
@@ -44,18 +55,19 @@ class _AddCardScreenState extends State<AddCardScreen> {
       return 'Formato de fecha inválido';
     }
     final parts = value.split('/');
-    final month = int.parse(parts[0]);
-    final year = int.parse(parts[1]);
+    final month = int.tryParse(parts[0]);
+    final year = int.tryParse(parts[1]);
+    if (month == null || year == null) return 'Fecha inválida';
+    if (month < 1 || month > 12) return 'Mes inválido';
     final currentYear = DateTime.now().year % 100;
     final currentMonth = DateTime.now().month;
-
     if (year < currentYear || (year == currentYear && month < currentMonth)) {
       return 'La tarjeta ya está expirada';
     }
     return null;
   }
 
-  // Validación del CVV
+  // Validación del CVV: debe ser de 3 dígitos
   String? _validateCVV(String? value) {
     if (value == null || value.isEmpty) {
       return 'Campo requerido';
@@ -70,12 +82,11 @@ class _AddCardScreenState extends State<AddCardScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
-      _isSaving = true;  // Deshabilitar el botón
+      _isSaving = true; // Deshabilitar el botón mientras se guarda
     });
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
-    
     if (token == null) return;
 
     final cardData = {
@@ -85,7 +96,7 @@ class _AddCardScreenState extends State<AddCardScreen> {
       'cardholder_name': _cardNameController.text,
       'nickname': _nicknameController.text,
       'billing_address': {
-        'address': _billingAddressController.text, // Si deseas agregar más campos, los puedes incluir aquí
+        'address': _billingAddressController.text,
       },
       'credit_limit': double.tryParse(_creditLimitController.text) ?? 0.0,
       'currency': _currency,
@@ -110,9 +121,21 @@ class _AddCardScreenState extends State<AddCardScreen> {
       print('Error saving card: $e');
     } finally {
       setState(() {
-        _isSaving = false;  // Volver a habilitar el botón
+        _isSaving = false; // Volver a habilitar el botón
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _cardNameController.dispose();
+    _cardNumberController.dispose();
+    _expDateController.dispose();
+    _cvvController.dispose();
+    _nicknameController.dispose();
+    _billingAddressController.dispose();
+    _creditLimitController.dispose();
+    super.dispose();
   }
 
   @override
@@ -131,8 +154,10 @@ class _AddCardScreenState extends State<AddCardScreen> {
                   labelText: 'Nombre de Tarjeta',
                   hintText: 'Ingrese un nombre',
                 ),
-                validator: (value) => value!.isEmpty ? 'Campo requerido' : null,
+                validator: (value) =>
+                    value == null || value.isEmpty ? 'Campo requerido' : null,
               ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _cardNumberController,
                 decoration: const InputDecoration(
@@ -140,16 +165,24 @@ class _AddCardScreenState extends State<AddCardScreen> {
                   hintText: '**** **** **** ****',
                 ),
                 keyboardType: TextInputType.number,
+                // Permite solo dígitos y máximo 16 números
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(16),
+                ],
                 validator: _validateCardNumber,
               ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _nicknameController,
                 decoration: const InputDecoration(
                   labelText: 'Apodo de la tarjeta',
                   hintText: 'Ej. Tarjeta principal',
                 ),
-                validator: (value) => value!.isEmpty ? 'Campo requerido' : null,
+                validator: (value) =>
+                    value == null || value.isEmpty ? 'Campo requerido' : null,
               ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _billingAddressController,
                 decoration: const InputDecoration(
@@ -157,6 +190,7 @@ class _AddCardScreenState extends State<AddCardScreen> {
                   hintText: 'Dirección de facturación',
                 ),
               ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _creditLimitController,
                 decoration: const InputDecoration(
@@ -164,15 +198,20 @@ class _AddCardScreenState extends State<AddCardScreen> {
                   hintText: 'Ingrese límite de crédito',
                 ),
                 keyboardType: TextInputType.number,
+                // Permite solo dígitos y el punto decimal
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                ],
               ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _selectedCardType,
                 items: const [
                   DropdownMenuItem(value: 'Crédito', child: Text('Crédito')),
-
                 ],
                 onChanged: (value) => setState(() => _selectedCardType = value!),
               ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
@@ -182,6 +221,10 @@ class _AddCardScreenState extends State<AddCardScreen> {
                         labelText: 'MM/YY',
                         hintText: 'MM/YY',
                       ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        _expDateFormatter,
+                      ],
                       validator: _validateExpirationDate,
                     ),
                   ),
@@ -194,6 +237,11 @@ class _AddCardScreenState extends State<AddCardScreen> {
                         hintText: '***',
                       ),
                       keyboardType: TextInputType.number,
+                      // Permite solo 3 dígitos
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(3),
+                      ],
                       validator: _validateCVV,
                     ),
                   ),
@@ -201,16 +249,17 @@ class _AddCardScreenState extends State<AddCardScreen> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _isSaving ? null : _saveCard, // Deshabilitar el botón mientras se guarda
+                onPressed: _isSaving ? null : _saveCard,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: const Color.fromARGB(255, 148, 214, 255),
                   minimumSize: const Size(double.infinity, 50),
                 ),
                 child: _isSaving
                     ? const CircularProgressIndicator(
                         color: Colors.white,
                       )
-                    : const Text('GUARDAR TARJETA', style: TextStyle(color: Colors.white)),
+                    : const Text('GUARDAR TARJETA',
+                        style: TextStyle(color: Colors.white)),
               ),
             ],
           ),

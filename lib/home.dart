@@ -9,6 +9,9 @@ import 'calendar_screen.dart';
 import 'profile_screen.dart';
 import 'search_screen.dart';
 import 'service_detail_screen.dart';
+import 'cleaners_profile.dart';
+import 'users_notifications.dart'; // Asegúrate de tener esta pantalla implementada
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,13 +30,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    // Se ha eliminado la inicialización del servicio de notificaciones.
     _loadData();
   }
 
   Future<void> _loadData() async {
     await _getUserData();
     await _getServices();
-    setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   Future<void> _getUserData() async {
@@ -47,7 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        setState(() => userName = data['name'] ?? 'Usuario');
+        setState(() {
+          userName = data['name'] ?? 'Usuario';
+        });
       }
     } catch (_) {}
   }
@@ -55,7 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _getServices() async {
     try {
       final response = await http.get(
-          Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'));
+        Uri.parse('https://apifixya.onrender.com/services?page=1&size=10'),
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final allServices = List<dynamic>.from(data['data']);
@@ -76,15 +85,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue[50],
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.notifications, color: Colors.black),
-          onPressed: () {},
-        ),
         actions: [
+          // Icono de campana para notificaciones
+          IconButton(
+            icon: const Icon(Icons.notifications, color: Colors.black),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsPage(),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.search, color: Colors.black),
             onPressed: () {
@@ -106,15 +123,15 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: const Color.fromARGB(255, 148, 214, 255),
+        unselectedItemColor: const Color.fromARGB(153, 153, 153, 153),
         backgroundColor: Colors.white,
         showUnselectedLabels: false,
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today), label: 'Calendario'),
+              icon: Icon(Icons.calendar_today), label: 'Historial'),
           BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'Menú'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
@@ -125,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildPageContent() {
     switch (_selectedIndex) {
       case 1:
-        return const CalendarScreen();
+        return const ProposalsPage();
       case 2:
         return const Center(child: Text('Menú'));
       case 3:
@@ -141,16 +158,21 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Hola, $userName!",
-              style:
-                  const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(
+            "Hola, $userName!",
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 20),
-          const Text("Clean Fast",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Clean Fast",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           _buildHorizontalList(services1),
           const SizedBox(height: 20),
-          const Text("Populares",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Populares",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           _buildHorizontalList(services2),
         ],
       ),
@@ -174,23 +196,33 @@ class _HomeScreenState extends State<HomeScreen> {
     final imageUrl = service['imageUrl'];
     final imageBytea = service['imagebyte'];
     final name = service['name'] ?? 'Sin nombre';
-    final price = service['price'] ?? 'Precio no disponible';
     final description = service['description'] ?? 'Sin descripción';
+
+    // Formateamos el precio según la localización.
+    String priceText;
+    if (service['price'] is num) {
+      final double price = (service['price'] as num).toDouble();
+      final locale = Localizations.localeOf(context).toString();
+      priceText = NumberFormat.simpleCurrency(locale: locale).format(price);
+    } else {
+      priceText = service['price']?.toString() ?? 'Precio no disponible';
+    }
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (context) => ServiceDetailScreen(service: service)),
+            builder: (context) => ServiceDetailScreen(service: service),
+          ),
         );
       },
       child: Container(
         width: 200,
         margin: const EdgeInsets.symmetric(horizontal: 8),
         child: Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,7 +246,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             Uint8List.fromList(hex.decode(imageBytea)),
                             height: 120,
                             width: double.infinity,
-                            fit: BoxFit.cover)
+                            fit: BoxFit.cover,
+                          )
                         : const Icon(Icons.image, size: 120),
               ),
               Padding(
@@ -231,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      price.toString(),
+                      priceText,
                       style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -240,7 +273,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 4),
                     Text(
                       description,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.grey),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

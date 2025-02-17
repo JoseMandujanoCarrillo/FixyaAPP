@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io'; // Para detectar SocketException (sin conexión)
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,29 +15,30 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
-  String? userToken; // Variable para almacenar el token del usuario
+  String? userToken; // Variable para almacenar el token
+
+  // Variable para controlar si la contraseña se muestra u oculta
+  bool obscurePassword = true;
 
   Future<void> login() async {
     setState(() {
       isLoading = true;
     });
 
-    // Mostrar un diálogo de carga
+    // Mostrar diálogo de carga
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return const Center(
-          child: CircularProgressIndicator(),
-        );
+        return const Center(child: CircularProgressIndicator());
       },
     );
 
     try {
-      // URL del endpoint de login
-      final url = Uri.parse('https://apifixya.onrender.com/users/login');
-      final response = await http.post(
-        url,
+      // Intentar login en el endpoint de usuarios
+      final userUrl = Uri.parse('https://apifixya.onrender.com/users/login');
+      final userResponse = await http.post(
+        userUrl,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': emailController.text,
@@ -44,46 +46,121 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
-      // Cerrar el diálogo de carga
-      Navigator.pop(context);
+      if (userResponse.statusCode == 200) {
+        // Login exitoso para usuarios
+        final data = json.decode(userResponse.body);
+        userToken = data['token'];
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        userToken = data['token']; // Guardar el token en la variable
-
-        // Obtener los datos del usuario desde el endpoint /users/me
-        final userResponse = await http.get(
+        // Obtener datos del usuario
+        final meResponse = await http.get(
           Uri.parse('https://apifixya.onrender.com/users/me'),
           headers: {'Authorization': 'Bearer $userToken'},
         );
 
-        if (userResponse.statusCode == 200) {
-          final userData = json.decode(userResponse.body);
+        if (meResponse.statusCode == 200) {
+          final userData = json.decode(meResponse.body);
 
-          // Guardar el token y los datos del usuario en SharedPreferences
+          // Guardar token y datos en SharedPreferences
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('token', userToken!);
           await prefs.setInt('userId', userData['id']);
           await prefs.setString('userName', userData['name']);
 
-          // Mostrar un mensaje de éxito
+          Navigator.pop(context); // Cierra el diálogo de carga
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Inicio de sesión exitoso')),
           );
 
-          // Redirigir a HomeScreen
+          // Redirige a la pantalla de usuario
           Navigator.pushReplacementNamed(context, '/home');
+          return;
         } else {
-          throw Exception('Error al obtener los datos del usuario');
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error al obtener los datos del usuario')),
+          );
+          return;
         }
-      } else {
-        // Mostrar un mensaje de error si el inicio de sesión falla
+      } else if (userResponse.statusCode == 401) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${response.body}')),
+          const SnackBar(content: Text('Contraseña incorrecta')),
         );
+        return;
+      } else {
+        // Si falla el login como usuario (por ejemplo, no se encuentra), se intenta login como cleaner
+        final cleanerUrl = Uri.parse('https://apifixya.onrender.com/cleaners/login');
+        final cleanerResponse = await http.post(
+          cleanerUrl,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'email': emailController.text,
+            'password': passwordController.text,
+          }),
+        );
+
+        if (cleanerResponse.statusCode == 200) {
+          // Login exitoso para cleaners
+          final dataCleaner = json.decode(cleanerResponse.body);
+          userToken = dataCleaner['token'];
+
+          // Obtener datos del cleaner
+          final meCleanerResponse = await http.get(
+            Uri.parse('https://apifixya.onrender.com/cleaners/me'),
+            headers: {'Authorization': 'Bearer $userToken'},
+          );
+
+          if (meCleanerResponse.statusCode == 200) {
+            final cleanerData = json.decode(meCleanerResponse.body);
+
+            // Guardar token y datos en SharedPreferences
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('token', userToken!);
+            await prefs.setInt('cleanerId', cleanerData['id']);
+            await prefs.setString('cleanerName', cleanerData['name']);
+
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Inicio de sesión exitoso')),
+            );
+
+            // Redirige a la pantalla de cleaners
+            Navigator.pushReplacementNamed(context, '/cleanershome');
+            return;
+          } else {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error al obtener los datos del cleaner')),
+            );
+            return;
+          }
+        } else if (cleanerResponse.statusCode == 404) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Limpiador no encontrado')),
+          );
+          return;
+        } else if (cleanerResponse.statusCode == 401) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Contraseña incorrecta')),
+          );
+          return;
+        } else {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${cleanerResponse.body}')),
+          );
+          return;
+        }
       }
+    } on SocketException {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sin conexión a internet')),
+      );
     } catch (e) {
-      // Manejar cualquier excepción que ocurra durante el proceso
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -101,9 +178,8 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SingleChildScrollView(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Encabezado con logo y nombre de la aplicación
+            // Encabezado con logo y nombre de la app
             Container(
               height: 200,
               width: double.infinity,
@@ -119,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1976d2),
+                      color: Color.fromARGB(255, 148, 214, 255),
                     ),
                   ),
                   SizedBox(height: 10),
@@ -163,14 +239,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF1976d2)),
+                        borderSide: const BorderSide(
+                          color: Color.fromARGB(255, 148, 214, 255),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // Campo de contraseña
+                  // Campo de contraseña con icono para ver/ocultar contraseña
                   TextField(
                     controller: passwordController,
+                    obscureText: obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Ingresa tu contraseña',
                       labelStyle: const TextStyle(color: Colors.grey),
@@ -180,10 +259,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF1976d2)),
+                        borderSide: const BorderSide(
+                          color: Color.fromARGB(255, 148, 214, 255),
+                        ),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            obscurePassword = !obscurePassword;
+                          });
+                        },
                       ),
                     ),
-                    obscureText: true,
                   ),
                   const SizedBox(height: 30),
                   // Botón de inicio de sesión
@@ -191,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1976d2),
+                        backgroundColor: const Color.fromARGB(255, 0, 184, 255),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -207,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Enlace para redirigir a la pantalla de registro
+                  // Enlace para ir a la pantalla de registro (usuarios)
                   Center(
                     child: TextButton(
                       onPressed: () {
@@ -215,7 +306,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       child: const Text(
                         '¿No tienes cuenta? Regístrate aquí',
-                        style: TextStyle(color: Color(0xFF1976d2)),
+                        style: TextStyle(
+                          color: Color.fromARGB(255, 0, 184, 255),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Botón para registro de cleaners
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/registercleaner');
+                      },
+                      child: const Text(
+                        '¿Eres un limpiador? Regístrate aquí',
+                        style: TextStyle(
+                          color: Color.fromARGB(255, 0, 184, 255),
+                        ),
                       ),
                     ),
                   ),
