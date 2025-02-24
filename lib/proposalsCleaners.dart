@@ -66,6 +66,7 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
     }
   }
 
+  /// Función para actualizar el estado de la propuesta (ej: "accepted" o "rejected")
   Future<void> _updateProposalStatus(int proposalId, String newStatus) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -85,10 +86,48 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
       );
 
       if (response.statusCode == 200) {
-        _fetchProposals(); // Update proposals list after status change
+        _fetchProposals(); // Actualiza la lista tras el cambio de estado
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Error al actualizar la propuesta")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error de conexión")),
+      );
+    }
+  }
+
+  /// Función para marcar que el cleaner ha presionado "Comenzar"
+  /// Esta función actualiza la propuesta en la API para guardar "cleanerStarted": true.
+  Future<void> _markCleanerStarted(int proposalId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+
+    final url = Uri.parse('https://apifixya.onrender.com/proposals/$proposalId');
+    final body = json.encode({"cleanerStarted": true});
+
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Limpieza iniciada, esperando confirmación del usuario")),
+        );
+        _fetchProposals();
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al iniciar la limpieza")),
         );
       }
     } catch (e) {
@@ -109,7 +148,9 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
         title: const Text("Propuestas del Limpiador"),
         bottom: TabBar(
           controller: _tabController,
-          tabs: statuses.map((status) => Tab(text: statusLabels[status])).toList(),
+          tabs: statuses
+              .map((status) => Tab(text: statusLabels[status]))
+              .toList(),
         ),
       ),
       body: isLoading
@@ -146,6 +187,7 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
                                 builder: (context) => ProposalDetailScreen(
                                   proposal: proposal,
                                   onStatusChange: _updateProposalStatus,
+                                  onCleanerStart: _markCleanerStarted,
                                 ),
                               ),
                             );
@@ -161,18 +203,65 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
   }
 }
 
+/// Pantalla de detalle para la propuesta (versión para cleaners)
 class ProposalDetailScreen extends StatelessWidget {
   final dynamic proposal;
   final Function(int, String) onStatusChange;
+  final Function(int) onCleanerStart;
 
   const ProposalDetailScreen({
     Key? key,
     required this.proposal,
     required this.onStatusChange,
+    required this.onCleanerStart,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    Widget actionButtons;
+    if (proposal['status'] == 'pending') {
+      actionButtons = Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Color.fromARGB(255, 0, 184, 255)),
+            onPressed: () {
+              onStatusChange(proposal['id'], "accepted");
+              Navigator.pop(context);
+            },
+            child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              onStatusChange(proposal['id'], "rejected");
+              Navigator.pop(context);
+            },
+            child: const Text("Rechazar", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      );
+    } else if (proposal['status'] == 'accepted') {
+      // Mostrar botón "Comenzar" solo si aún no se ha marcado el inicio (cleanerStarted no es true)
+      bool cleanerStarted = proposal['cleanerStarted'] ?? false;
+      if (!cleanerStarted) {
+        actionButtons = Center(
+          child: ElevatedButton(
+            onPressed: () {
+              onCleanerStart(proposal['id']);
+            },
+            child: const Text("Comenzar"),
+          ),
+        );
+      } else {
+        actionButtons = const Center(
+          child: Text("Esperando confirmación del usuario"),
+        );
+      }
+    } else {
+      actionButtons = Container();
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Propuesta #${proposal['id']}"),
@@ -182,31 +271,14 @@ class ProposalDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Dirección: ${proposal['direccion'] ?? ''}", style: const TextStyle(fontSize: 18)),
-            Text("Fecha: ${proposal['date'] ?? ''}", style: const TextStyle(fontSize: 18)),
-            Text("Estado: ${proposal['status'] ?? ''}", style: const TextStyle(fontSize: 18)),
+            Text("Dirección: ${proposal['direccion'] ?? ''}",
+                style: const TextStyle(fontSize: 18)),
+            Text("Fecha: ${proposal['date'] ?? ''}",
+                style: const TextStyle(fontSize: 18)),
+            Text("Estado: ${proposal['status'] ?? ''}",
+                style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  onPressed: () {
-                    onStatusChange(proposal['id'], "accepted");
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () {
-                    onStatusChange(proposal['id'], "rejected");
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Rechazar", style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            ),
+            actionButtons,
             const SizedBox(height: 20),
             Center(
               child: ElevatedButton(

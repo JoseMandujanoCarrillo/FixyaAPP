@@ -174,11 +174,27 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         onTap: () async {
           final today = DateTime.now();
           final firstDate = DateTime(today.year, today.month, today.day);
+          // Se define un mapeo para convertir weekday a nombre en español.
+          final weekDays = {
+            1: "Lunes",
+            2: "Martes",
+            3: "Miércoles",
+            4: "Jueves",
+            5: "Viernes",
+            6: "Sábado",
+            7: "Domingo"
+          };
+          // Se obtienen los días permitidos desde el JSON del servicio.
+          final allowedDays = widget.service['schedule']?['days'] ?? [];
           DateTime? pickedDate = await showDatePicker(
             context: context,
             initialDate: today,
             firstDate: firstDate,
             lastDate: DateTime(2030),
+            selectableDayPredicate: (date) {
+              // Solo se permiten los días cuyo nombre esté en la lista de permitidos.
+              return allowedDays.contains(weekDays[date.weekday]);
+            },
           );
           if (pickedDate != null) {
             setState(() {
@@ -225,6 +241,32 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             initialTime: TimeOfDay.now(),
           );
           if (pickedTime != null) {
+            // Se obtienen los horarios permitidos desde el JSON del servicio.
+            final allowedStartStr = widget.service['schedule']?['startTime'] ?? "00:00";
+            final allowedEndStr = widget.service['schedule']?['endTime'] ?? "23:59";
+            final allowedStartParts = allowedStartStr.split(":");
+            final allowedEndParts = allowedEndStr.split(":");
+            final allowedStartTime = TimeOfDay(
+              hour: int.parse(allowedStartParts[0]),
+              minute: int.parse(allowedStartParts[1]),
+            );
+            final allowedEndTime = TimeOfDay(
+              hour: int.parse(allowedEndParts[0]),
+              minute: int.parse(allowedEndParts[1]),
+            );
+
+            // Función para convertir TimeOfDay a minutos desde medianoche.
+            int toMinutes(TimeOfDay time) => time.hour * 60 + time.minute;
+
+            if (toMinutes(pickedTime) < toMinutes(allowedStartTime) ||
+                toMinutes(pickedTime) > toMinutes(allowedEndTime)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("La hora seleccionada no está dentro del horario permitido")),
+              );
+              return;
+            }
+
+            // Validación adicional: si la fecha seleccionada es hoy, la hora debe ser futura.
             final now = DateTime.now();
             if (_selectedDate!.year == now.year &&
                 _selectedDate!.month == now.month &&
@@ -245,7 +287,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             }
             setState(() {
               _timeController.text =
-                  "${pickedTime.hour}:${pickedTime.minute}:00";
+                  "${pickedTime.hour}:${pickedTime.minute.toString().padLeft(2, '0')}:00";
             });
           }
         },

@@ -21,8 +21,12 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   final TextEditingController _priceController = TextEditingController();
 
   File? _selectedImage; // Almacenará la imagen seleccionada
-
   bool _isLoading = false;
+
+  // Variables para el schedule
+  List<String> _selectedDays = [];
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
 
   @override
   void dispose() {
@@ -61,6 +65,98 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
       }
     }
     return null;
+  }
+
+  /// Helper para formatear un TimeOfDay a "HH:mm"
+  String _formatTime(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Construye la sección para seleccionar el schedule.
+  Widget _buildSchedulePicker() {
+    final List<String> daysOfWeek = [
+      "Lunes",
+      "Martes",
+      "Miércoles",
+      "Jueves",
+      "Viernes",
+      "Sábado",
+      "Domingo"
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Selecciona los días del servicio:",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8.0),
+        Wrap(
+          spacing: 8.0,
+          children: daysOfWeek.map((day) {
+            return FilterChip(
+              label: Text(day),
+              selected: _selectedDays.contains(day),
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedDays.add(day);
+                  } else {
+                    _selectedDays.remove(day);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16.0),
+        const Text(
+          "Selecciona la hora de inicio:",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            final TimeOfDay? pickedTime = await showTimePicker(
+              context: context,
+              initialTime: _startTime ?? const TimeOfDay(hour: 6, minute: 0),
+            );
+            if (pickedTime != null) {
+              setState(() {
+                _startTime = pickedTime;
+              });
+            }
+          },
+          child: Text(
+            _startTime != null
+                ? "Inicio: ${_startTime!.format(context)}"
+                : "Seleccionar hora de inicio",
+          ),
+        ),
+        const SizedBox(height: 16.0),
+        const Text(
+          "Selecciona la hora de finalización:",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            final TimeOfDay? pickedTime = await showTimePicker(
+              context: context,
+              initialTime: _endTime ?? const TimeOfDay(hour: 19, minute: 0),
+            );
+            if (pickedTime != null) {
+              setState(() {
+                _endTime = pickedTime;
+              });
+            }
+          },
+          child: Text(
+            _endTime != null
+                ? "Fin: ${_endTime!.format(context)}"
+                : "Seleccionar hora de finalización",
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _submitService() async {
@@ -142,6 +238,13 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
         imageUrl = 'https://i.imgur.com/X7YGq1a.jpg';
       }
 
+      // Construir el objeto schedule
+      final Map<String, dynamic> scheduleData = {
+        'days': _selectedDays,
+        'startTime': _startTime != null ? _formatTime(_startTime!) : "",
+        'endTime': _endTime != null ? _formatTime(_endTime!) : "",
+      };
+
       // Construir el cuerpo de la petición.
       final Map<String, dynamic> bodyData = {
         'name': _nameController.text.trim(),
@@ -150,6 +253,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
         'cleanerId': cleanerId,
         'imagebyte': '', // Si no se utiliza, se puede dejar vacío
         'imageUrl': imageUrl,
+        'schedule': scheduleData,
       };
 
       final response = await http.post(
@@ -261,8 +365,10 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
                 controller: _priceController,
                 keyboardType: TextInputType.number,
               ),
-              // Se usa el image picker en lugar de un campo de URL.
               _buildImagePicker(),
+              const SizedBox(height: 20),
+              // Sección para el schedule
+              _buildSchedulePicker(),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isLoading ? null : _submitService,

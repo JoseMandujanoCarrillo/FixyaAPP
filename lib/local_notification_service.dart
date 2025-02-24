@@ -1,66 +1,57 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/material.dart';
+import 'users_notifications.dart'; // Asegúrate de tener esta pantalla implementada
 
 class LocalNotificationService {
-  // Implementación singleton
   static final LocalNotificationService _instance = LocalNotificationService._internal();
-
-  factory LocalNotificationService() {
-    return _instance;
-  }
-
+  factory LocalNotificationService() => _instance;
   LocalNotificationService._internal();
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  Future<void> init() async {
-    // Configuración para Android
-    const AndroidInitializationSettings initializationSettingsAndroid =
+  GlobalKey<NavigatorState>? navigatorKey;
+
+  Future<void> init(GlobalKey<NavigatorState> navKey) async {
+    navigatorKey = navKey;
+    
+    const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // Configuración para iOS
-    const DarwinInitializationSettings initializationSettingsIOS =
+    const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
-      requestSoundPermission: true,
-      requestBadgePermission: true,
-      requestAlertPermission: true,
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
+    const InitializationSettings initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
     );
-
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
+    
+    await flutterLocalNotificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        // Al interactuar con la notificación, se navega a la pantalla de notificaciones de forma global
+        navigatorKey?.currentState?.pushNamed('/notifications');
+      },
     );
-
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
   Future<void> showNotification({
     required int id,
     required String title,
     required String body,
+    String? payload,
   }) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'channel_id', // ID del canal (puedes definir el que desees)
-      'channel_name', // Nombre del canal
-      channelDescription: 'channel_description', // Descripción del canal
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'nuevas_notificaciones_channel',
+      'Nuevas Notificaciones',
+      channelDescription: 'Canal para notificar nuevas notificaciones',
       importance: Importance.max,
       priority: Priority.high,
     );
-
-    const DarwinNotificationDetails iosNotificationDetails =
-        DarwinNotificationDetails();
-
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-      iOS: iosNotificationDetails,
-    );
-
-    await flutterLocalNotificationsPlugin.show(
-      id,
-      title,
-      body,
-      platformChannelSpecifics,
-    );
+    const NotificationDetails details = NotificationDetails(android: androidDetails);
+    
+    await flutterLocalNotificationsPlugin.show(id, title, body, details, payload: payload);
   }
 }

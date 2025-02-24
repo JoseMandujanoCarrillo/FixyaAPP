@@ -14,6 +14,66 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   bool isExpanded = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Después de que se haya renderizado la pantalla, se verifica el horario.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.service['schedule'] != null &&
+          widget.service['schedule'] is Map) {
+        final schedule = widget.service['schedule'];
+        final List<dynamic> allowedDays = schedule['days'] ?? [];
+        final String allowedStartStr = schedule['startTime'] ?? "00:00";
+        final String allowedEndStr = schedule['endTime'] ?? "23:59";
+
+        // Se asume formato "HH:mm"
+        final allowedStartParts = allowedStartStr.split(":");
+        final allowedEndParts = allowedEndStr.split(":");
+        final TimeOfDay allowedStartTime = TimeOfDay(
+          hour: int.parse(allowedStartParts[0]),
+          minute: int.parse(allowedStartParts[1]),
+        );
+        final TimeOfDay allowedEndTime = TimeOfDay(
+          hour: int.parse(allowedEndParts[0]),
+          minute: int.parse(allowedEndParts[1]),
+        );
+
+        final now = DateTime.now();
+        final currentMinutes = now.hour * 60 + now.minute;
+        final allowedStartMinutes =
+            allowedStartTime.hour * 60 + allowedStartTime.minute;
+        final allowedEndMinutes =
+            allowedEndTime.hour * 60 + allowedEndTime.minute;
+
+        // Mapeo para obtener el nombre del día en español
+        final weekDays = {
+          1: "Lunes",
+          2: "Martes",
+          3: "Miércoles",
+          4: "Jueves",
+          5: "Viernes",
+          6: "Sábado",
+          7: "Domingo"
+        };
+        final currentDayName = weekDays[now.weekday] ?? "";
+
+        // Si el día actual no está permitido o la hora no se encuentra en el rango permitido:
+        if (!allowedDays.contains(currentDayName) ||
+            currentMinutes < allowedStartMinutes ||
+            currentMinutes > allowedEndMinutes) {
+          final allowedDaysStr = allowedDays.join(", ");
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  "Atención: Este servicio solo se presta de $allowedStartStr a $allowedEndStr, los días: $allowedDaysStr"),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
@@ -25,7 +85,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               const SizedBox(height: 40),
               Row(
                 children: [
-                  const Icon(Icons.cleaning_services, size: 30, color: Color.fromARGB(255, 0, 184, 255)),
+                  const Icon(Icons.cleaning_services,
+                      size: 30, color: Color.fromARGB(255, 0, 184, 255)),
                   const SizedBox(width: 10),
                   Text(
                     "WC",
@@ -44,7 +105,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               ),
               const SizedBox(height: 10),
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15)),
                 elevation: 5,
                 child: Padding(
                   padding: const EdgeInsets.all(10),
@@ -72,14 +134,17 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                               ),
                             ),
                             Text(
-                              widget.service['description'] ?? 'Descripción del servicio',
-                              style: const TextStyle(fontSize: 14, color: Colors.grey),
+                              widget.service['description'] ??
+                                  'Descripción del servicio',
+                              style: const TextStyle(
+                                  fontSize: 14, color: Colors.grey),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 5),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: const [],
                             ),
                           ],
                         ),
@@ -90,10 +155,16 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               ),
               const SizedBox(height: 20),
               ..._buildDetailSection("Realización del servicio", "12/09/2024"),
-              ..._buildDetailSection("Hora", '${widget.service['schedule'] ?? '8:00am - 6:00pm'}'),
-              ..._buildDetailSection("Precio Total",' ${widget.service['price'] ?? 'Null MXM'}'),
-              ..._buildDetailSection("Descripcion", '${widget.service['description'] ?? 'Descripción del servicio'}'),
-             // ..._buildDetailSection("Dirección", "Calle 101 × 67 #602A col. Centro CP 9000"),
+              ..._buildDetailSection(
+                  "Hora",
+                  widget.service['schedule'] != null &&
+                          widget.service['schedule'] is Map
+                      ? "${widget.service['schedule']['startTime']} - ${widget.service['schedule']['endTime']}"
+                      : '8:00am - 6:00pm'),
+              ..._buildDetailSection("Precio Total",
+                  '${widget.service['price'] ?? 'Null MXM'}'),
+              ..._buildDetailSection("Descripción",
+                  '${widget.service['description'] ?? 'Descripción del servicio'}'),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -101,26 +172,34 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   OutlinedButton(
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 30, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('CANCELAR', style: TextStyle(color: Colors.black)),
+                    child: const Text('CANCELAR',
+                        style: TextStyle(color: Colors.black)),
                   ),
                   ElevatedButton(
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => ServiceFormScreen(service: widget.service),
+                          builder: (context) =>
+                              ServiceFormScreen(service: widget.service),
                         ),
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 0, 184, 255),
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      backgroundColor:
+                          const Color.fromARGB(255, 0, 184, 255),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 30, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('CONFIRMAR', style: TextStyle(color: Colors.white)),
+                    child: const Text('CONFIRMAR',
+                        style: TextStyle(color: Colors.white)),
                   ),
                 ],
               ),

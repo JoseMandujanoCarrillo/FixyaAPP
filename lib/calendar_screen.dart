@@ -17,10 +17,11 @@ class _ProposalsPageState extends State<ProposalsPage>
   bool isLoading = true;
   late TabController _tabController;
 
-  // Lista de estados en el orden deseado: pendiente, aceptada, rechazada.
+  // Lista de estados en el orden deseado: pendiente, aceptada, en progreso, rechazada.
   final List<String> statuses = [
     "pending",
     "accepted",
+    "in_progress",
     "rejected",
   ];
 
@@ -28,6 +29,7 @@ class _ProposalsPageState extends State<ProposalsPage>
   final Map<String, String> statusLabels = {
     "pending": "Pendiente",
     "accepted": "Aceptada",
+    "in_progress": "En progreso",
     "rejected": "Rechazada",
   };
 
@@ -50,8 +52,8 @@ class _ProposalsPageState extends State<ProposalsPage>
       });
       return;
     }
-    // Se asume que el endpoint devuelve TODAS las propuestas del usuario (sin paginar)
-    final Uri url = Uri.parse('https://apifixya.onrender.com/proposals/my');
+    // Se usa el endpoint con size muy grande para obtener todas las propuestas
+    final Uri url = Uri.parse('https://apifixya.onrender.com/proposals/my?size=999999999');
     try {
       final response = await http.get(
         url,
@@ -90,15 +92,51 @@ class _ProposalsPageState extends State<ProposalsPage>
     }
   }
 
-  // Filtra las propuestas según el estado recibido
-  List<dynamic> _filterProposalsByStatus(String status) {
-    return proposals.where((proposal) => proposal['status'] == status).toList();
+  // Función para confirmar la propuesta (llama al endpoint /confirm)
+  Future<void> _confirmProposal(int proposalId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+    
+    final url = Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/confirm');
+    
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Servicio confirmado"))
+        );
+        _fetchProposals();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al confirmar el servicio"))
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error de conexión"))
+      );
+    }
   }
 
   // Función para formatear la fecha
   String formatDateTime(String dateTimeString) {
     DateTime dateTime = DateTime.parse(dateTimeString).toLocal();
     return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
+  }
+
+  // Filtra las propuestas según el estado recibido, eliminando espacios y forzando String.
+  List<dynamic> _filterProposalsByStatus(String status) {
+    return proposals.where((proposal) {
+      final currentStatus = (proposal['status'] ?? '').toString().trim();
+      return currentStatus == status;
+    }).toList();
   }
 
   // Construye el widget para cada propuesta
@@ -112,12 +150,21 @@ class _ProposalsPageState extends State<ProposalsPage>
       case 'accepted':
         statusColor = Colors.green;
         break;
+      case 'in_progress':
+        statusColor = Colors.blue;
+        break;
       case 'rejected':
         statusColor = Colors.red;
         break;
       default:
         statusColor = Colors.black;
     }
+
+    // Condición para mostrar el botón de confirmar:
+    // La propuesta debe estar en estado "accepted" y además debe haberse
+    // indicado (por un flag, por ejemplo 'cleanerStarted') que el cleaner presionó "Comenzar"
+    bool showConfirm = proposal['status'] == 'accepted' &&
+        (proposal['cleanerStarted'] ?? false) == true;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -160,6 +207,17 @@ class _ProposalsPageState extends State<ProposalsPage>
                 color: Colors.black54,
               ),
             ),
+            // Si se cumple la condición, se muestra un botón para confirmar
+            if (showConfirm)
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await _confirmProposal(proposal['id']);
+                  },
+                  child: const Text("Confirmar"),
+                ),
+              ),
           ],
         ),
       ),
@@ -192,17 +250,14 @@ class _ProposalsPageState extends State<ProposalsPage>
         title: const Text("Historial de servicio"),
         bottom: TabBar(
           controller: _tabController,
-          tabs: statuses
-              .map((status) => Tab(text: statusLabels[status]))
-              .toList(),
+          tabs: statuses.map((status) => Tab(text: statusLabels[status])).toList(),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
-              children:
-                  statuses.map((status) => _buildTabView(status)).toList(),
+              children: statuses.map((status) => _buildTabView(status)).toList(),
             ),
     );
   }
