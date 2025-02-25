@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'payment_methods_screen.dart'; // Asegúrate de tener esta pantalla
-import 'dart:io';
-
 
 // ====================== Pantalla de Perfil del Cleaner ======================
 class CleanersProfile extends StatefulWidget {
@@ -20,8 +19,7 @@ class _CleanersProfileState extends State<CleanersProfile> {
   String userName = "Cargando...";
   String userEmail = "Cargando...";
   String userImageUrl = "";
-  String latitude = "";
-  String longitude = "";
+
   bool isLoading = true;
 
   final ImagePicker _picker = ImagePicker(); // Para seleccionar imagen
@@ -59,8 +57,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
           userName = data['name'] ?? 'Usuario';
           userEmail = data['email'] ?? 'Sin correo';
           userImageUrl = data['image_url'] ?? "";
-          latitude = data['latitude'] != null ? data['latitude'].toString() : '';
-          longitude = data['longitude'] != null ? data['longitude'].toString() : '';
           isLoading = false;
         });
       } else {
@@ -97,7 +93,7 @@ class _CleanersProfileState extends State<CleanersProfile> {
       return;
     }
 
-    final payload = {field: newValue};
+    final payload = { field: newValue };
 
     try {
       final response = await http.put(
@@ -147,11 +143,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
           userEmail = updatedValue;
           fieldToUpdate = "email";
         } else if (label == 'Latitud') {
-          latitude = updatedValue;
-          fieldToUpdate = "latitude";
-        } else if (label == 'Longitud') {
-          longitude = updatedValue;
-          fieldToUpdate = "longitude";
         }
       });
       // Actualiza en la API solo el campo modificado.
@@ -159,45 +150,27 @@ class _CleanersProfileState extends State<CleanersProfile> {
     }
   }
 
-  /// Método para seleccionar y subir la imagen (imagen_final) a Imgur.
+  /// Método para seleccionar y subir la imagen de perfil a Imgur (solo usando la galería).
   Future<void> _pickAndUploadFinalImage() async {
-    final ImageSource? source = await showDialog<ImageSource>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Selecciona origen de la imagen"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.camera),
-            child: const Text("Cámara"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.gallery),
-            child: const Text("Galería"),
-          ),
-        ],
-      ),
-    );
+    // Se usa solo la galería (sin opción para cámara)
+    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile == null) return; // Se canceló la selección
 
-    if (source == null) return; // Se canceló la selección.
-
-    final pickedFile = await _picker.pickImage(source: source);
-    if (pickedFile != null) {
-      final File imageFile = File(pickedFile.path);
-      // Sube la imagen a Imgur.
-      final String? uploadedUrl = await _uploadImage(imageFile);
-      if (uploadedUrl != null) {
-        setState(() {
-          userImageUrl = uploadedUrl;
-        });
-        await _updateUserFieldOnApi("image_url", uploadedUrl);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Imagen actualizada exitosamente")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al subir la imagen")),
-        );
-      }
+    final File imageFile = File(pickedFile.path);
+    // Sube la imagen a Imgur.
+    final String? uploadedUrl = await _uploadImage(imageFile);
+    if (uploadedUrl != null) {
+      setState(() {
+        userImageUrl = uploadedUrl;
+      });
+      await _updateUserFieldOnApi("image_url", uploadedUrl);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Imagen actualizada exitosamente")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error al subir la imagen")),
+      );
     }
   }
 
@@ -303,8 +276,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
                             // Se muestran los demás campos editables
                             _buildEditableRow('Nombre', userName),
                             _buildEditableRow('Correo Electrónico', userEmail),
-                            _buildEditableRow('Latitud', latitude),
-                            _buildEditableRow('Longitud', longitude),
                             const SizedBox(height: 10),
                             // Botón para métodos de pago:
                             ElevatedButton(

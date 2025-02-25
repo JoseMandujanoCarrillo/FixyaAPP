@@ -223,7 +223,7 @@ class _RegisterCleanerScreenState extends State<RegisterCleanerScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
                   Text(
-                    'What clean',
+                    'cleanYa',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,

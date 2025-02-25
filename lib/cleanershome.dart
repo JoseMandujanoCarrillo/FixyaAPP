@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:convert/convert.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +42,7 @@ class _CleanersHomeState extends State<CleanersHome> {
   void initState() {
     super.initState();
     _initNotifications();
+    _loadNotifiedProposalIds(); // Carga los IDs notificados persistentes
     _loadData();
 
     // Inicia el timer para chequear propuestas cada 30 segundos
@@ -70,6 +70,24 @@ class _CleanersHomeState extends State<CleanersHome> {
     );
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  // Cargar los IDs notificados de SharedPreferences
+  Future<void> _loadNotifiedProposalIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String>? storedIds = prefs.getStringList('notifiedProposalIds');
+    if (storedIds != null) {
+      _notifiedProposalIds = storedIds.map((id) => int.parse(id)).toSet();
+    }
+  }
+
+  // Guardar los IDs notificados en SharedPreferences
+  Future<void> _saveNotifiedProposalIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setStringList(
+      'notifiedProposalIds',
+      _notifiedProposalIds.map((id) => id.toString()).toList(),
+    );
   }
 
   Future<void> _loadData() async {
@@ -141,11 +159,11 @@ class _CleanersHomeState extends State<CleanersHome> {
       if (response.statusCode == 200) {
         final proposals = json.decode(response.body) as List;
         for (var proposal in proposals) {
-          // Se asume que cada propuesta tiene un 'id'
           final int proposalId = proposal['id'];
           if (!_notifiedProposalIds.contains(proposalId)) {
             _notifiedProposalIds.add(proposalId);
-            // Agrega la notificación a la lista local
+            await _saveNotifiedProposalIds(); // Guarda el ID notificado
+
             setState(() {
               notifications.add({
                 'id': proposalId,
@@ -154,7 +172,6 @@ class _CleanersHomeState extends State<CleanersHome> {
                 'timestamp': DateTime.now().toIso8601String(),
               });
             });
-            // Muestra la notificación en el dispositivo
             _showLocalNotification(
               proposalId,
               'Nueva propuesta',
