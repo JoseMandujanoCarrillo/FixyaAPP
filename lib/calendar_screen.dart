@@ -34,7 +34,7 @@ class _ProposalsPageState extends State<ProposalsPage>
     "accepted": "Aceptada",
     "in_progress": "En progreso",
     "rejected": "Rechazada",
-    "finished" : "Finalizada"
+    "finished": "Finalizada"
   };
 
   @override
@@ -57,7 +57,8 @@ class _ProposalsPageState extends State<ProposalsPage>
       return;
     }
     // Se usa el endpoint con size muy grande para obtener todas las propuestas
-    final Uri url = Uri.parse('https://apifixya.onrender.com/proposals/my?size=40000000000');
+    final Uri url = Uri.parse(
+        'https://apifixya.onrender.com/proposals/my?size=40000000000');
     try {
       final response = await http.get(
         url,
@@ -102,8 +103,8 @@ class _ProposalsPageState extends State<ProposalsPage>
     final token = prefs.getString('token');
     if (token == null) return;
 
-    final url =
-        Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/confirm');
+    final url = Uri.parse(
+        'https://apifixya.onrender.com/proposals/$proposalId/confirm');
 
     try {
       final response = await http.put(
@@ -160,7 +161,7 @@ class _ProposalsPageState extends State<ProposalsPage>
         break;
       case 'finished':
         statusColor = Colors.purple;
-        break
+        break;
       default:
         statusColor = Colors.black;
     }
