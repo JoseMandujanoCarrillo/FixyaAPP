@@ -21,6 +21,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool obscurePassword = true;
 
   Future<void> login() async {
+    // Verificar que se hayan completado los campos
+    if (emailController.text.trim().isEmpty || passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, rellena todos los campos')),
+      );
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });

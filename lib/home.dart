@@ -105,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _getServices() async {
     try {
       final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/services?page=1&size=99999999999999999999999999999999999999999999999990'),
+        Uri.parse('https://apifixya.onrender.com/services?page=1&size=99990'),
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

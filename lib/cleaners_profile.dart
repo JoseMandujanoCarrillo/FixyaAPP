@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'payment_methods_screen.dart'; // Asegúrate de tener esta pantalla
+import 'dart:io';
+
 
 // ====================== Pantalla de Perfil del Cleaner ======================
 class CleanersProfile extends StatefulWidget {
@@ -20,6 +23,8 @@ class _CleanersProfileState extends State<CleanersProfile> {
   String latitude = "";
   String longitude = "";
   bool isLoading = true;
+
+  final ImagePicker _picker = ImagePicker(); // Para seleccionar imagen
 
   @override
   void initState() {
@@ -53,9 +58,7 @@ class _CleanersProfileState extends State<CleanersProfile> {
           userId = data['id'];
           userName = data['name'] ?? 'Usuario';
           userEmail = data['email'] ?? 'Sin correo';
-          // Si la API no retorna imagen, se usará una cadena vacía
           userImageUrl = data['image_url'] ?? "";
-          // Extraemos la latitud y longitud, en caso de que existan
           latitude = data['latitude'] != null ? data['latitude'].toString() : '';
           longitude = data['longitude'] != null ? data['longitude'].toString() : '';
           isLoading = false;
@@ -94,7 +97,7 @@ class _CleanersProfileState extends State<CleanersProfile> {
       return;
     }
 
-    final payload = { field: newValue };
+    final payload = {field: newValue};
 
     try {
       final response = await http.put(
@@ -122,8 +125,7 @@ class _CleanersProfileState extends State<CleanersProfile> {
     }
   }
 
-  /// Navega a la pantalla de edición, actualiza el dato local y llama a la función
-  /// para actualizar en la API.
+  /// Método para editar campos de texto (excepto la imagen)
   Future<void> _editField(String label, String currentValue) async {
     final updatedValue = await Navigator.push(
       context,
@@ -144,9 +146,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
         } else if (label == 'Correo Electrónico') {
           userEmail = updatedValue;
           fieldToUpdate = "email";
-        } else if (label == 'Imagen') {
-          userImageUrl = updatedValue;
-          fieldToUpdate = "image_url";
         } else if (label == 'Latitud') {
           latitude = updatedValue;
           fieldToUpdate = "latitude";
@@ -158,6 +157,66 @@ class _CleanersProfileState extends State<CleanersProfile> {
       // Actualiza en la API solo el campo modificado.
       await _updateUserFieldOnApi(fieldToUpdate, updatedValue);
     }
+  }
+
+  /// Método para seleccionar y subir la imagen (imagen_final) a Imgur.
+  Future<void> _pickAndUploadFinalImage() async {
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Selecciona origen de la imagen"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text("Cámara"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text("Galería"),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return; // Se canceló la selección.
+
+    final pickedFile = await _picker.pickImage(source: source);
+    if (pickedFile != null) {
+      final File imageFile = File(pickedFile.path);
+      // Sube la imagen a Imgur.
+      final String? uploadedUrl = await _uploadImage(imageFile);
+      if (uploadedUrl != null) {
+        setState(() {
+          userImageUrl = uploadedUrl;
+        });
+        await _updateUserFieldOnApi("image_url", uploadedUrl);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Imagen actualizada exitosamente")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al subir la imagen")),
+        );
+      }
+    }
+  }
+
+  /// Función para subir la imagen a Imgur y obtener la URL resultante.
+  Future<String?> _uploadImage(File imageFile) async {
+    final uri = Uri.parse('https://api.imgur.com/3/upload');
+    final request = http.MultipartRequest('POST', uri);
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+    // Reemplaza con tu Client-ID real de Imgur
+    request.headers['Authorization'] = 'Client-ID 32794ee601322f0';
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      final responseBody = await response.stream.bytesToString();
+      final data = json.decode(responseBody);
+      if (data['success'] == true) {
+        return data['data']['link'];
+      }
+    }
+    return null;
   }
 
   /// Widget que muestra la información con un botón de edición.
@@ -219,7 +278,7 @@ class _CleanersProfileState extends State<CleanersProfile> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Avatar con botón para editar la imagen (usa placeholder si no hay imagen)
+                            // Avatar con botón para editar la imagen usando Imgur
                             Stack(
                               children: [
                                 CircleAvatar(
@@ -235,14 +294,13 @@ class _CleanersProfileState extends State<CleanersProfile> {
                                   child: IconButton(
                                     icon: const Icon(Icons.edit,
                                         color: Colors.white, size: 20),
-                                    onPressed: () =>
-                                        _editField('Imagen', userImageUrl),
+                                    onPressed: _pickAndUploadFinalImage,
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 10),
-                            // Se muestran los campos editables
+                            // Se muestran los demás campos editables
                             _buildEditableRow('Nombre', userName),
                             _buildEditableRow('Correo Electrónico', userEmail),
                             _buildEditableRow('Latitud', latitude),

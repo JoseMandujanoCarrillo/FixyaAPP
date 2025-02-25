@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProposalsPage extends StatefulWidget {
   const ProposalsPage({Key? key}) : super(key: key);
@@ -23,6 +25,7 @@ class _ProposalsPageState extends State<ProposalsPage>
     "accepted",
     "in_progress",
     "rejected",
+    "finished",
   ];
 
   // Etiquetas para mostrar en las pestañas
@@ -31,6 +34,7 @@ class _ProposalsPageState extends State<ProposalsPage>
     "accepted": "Aceptada",
     "in_progress": "En progreso",
     "rejected": "Rechazada",
+    "finished" : "Finalizada"
   };
 
   @override
@@ -53,7 +57,7 @@ class _ProposalsPageState extends State<ProposalsPage>
       return;
     }
     // Se usa el endpoint con size muy grande para obtener todas las propuestas
-    final Uri url = Uri.parse('https://apifixya.onrender.com/proposals/my?size=999999999');
+    final Uri url = Uri.parse('https://apifixya.onrender.com/proposals/my?size=40000000000');
     try {
       final response = await http.get(
         url,
@@ -97,9 +101,10 @@ class _ProposalsPageState extends State<ProposalsPage>
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     if (token == null) return;
-    
-    final url = Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/confirm');
-    
+
+    final url =
+        Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/confirm');
+
     try {
       final response = await http.put(
         url,
@@ -109,19 +114,16 @@ class _ProposalsPageState extends State<ProposalsPage>
         },
       );
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Servicio confirmado"))
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Servicio confirmado")));
         _fetchProposals();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al confirmar el servicio"))
-        );
+            const SnackBar(content: Text("Error al confirmar el servicio")));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error de conexión"))
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Error de conexión")));
     }
   }
 
@@ -156,15 +158,22 @@ class _ProposalsPageState extends State<ProposalsPage>
       case 'rejected':
         statusColor = Colors.red;
         break;
+      case 'finished':
+        statusColor = Colors.purple;
+        break
       default:
         statusColor = Colors.black;
     }
 
     // Condición para mostrar el botón de confirmar:
     // La propuesta debe estar en estado "accepted" y además debe haberse
-    // indicado (por un flag, por ejemplo 'cleanerStarted') que el cleaner presionó "Comenzar"
+    // indicado que el cleaner presionó "Comenzar"
     bool showConfirm = proposal['status'] == 'accepted' &&
         (proposal['cleanerStarted'] ?? false) == true;
+
+    // Si "cleaner_finished" es true y el estado aún no es "finished", se muestra el botón para finalizar
+    bool showFinish = (proposal['cleaner_finished'] ?? false) == true &&
+        proposal['status'] != 'finished';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -207,7 +216,6 @@ class _ProposalsPageState extends State<ProposalsPage>
                 color: Colors.black54,
               ),
             ),
-            // Si se cumple la condición, se muestra un botón para confirmar
             if (showConfirm)
               Align(
                 alignment: Alignment.centerRight,
@@ -216,6 +224,27 @@ class _ProposalsPageState extends State<ProposalsPage>
                     await _confirmProposal(proposal['id']);
                   },
                   child: const Text("Confirmar"),
+                ),
+              ),
+            if (showFinish)
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    // Navega a la pantalla para subir imagen y finalizar
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            FinishProposalPage(proposal: proposal),
+                      ),
+                    );
+                    // Si se finalizó correctamente, se refrescan las propuestas
+                    if (result == true) {
+                      _fetchProposals();
+                    }
+                  },
+                  child: const Text("Subir y finalizar"),
                 ),
               ),
           ],
@@ -250,15 +279,225 @@ class _ProposalsPageState extends State<ProposalsPage>
         title: const Text("Historial de servicio"),
         bottom: TabBar(
           controller: _tabController,
-          tabs: statuses.map((status) => Tab(text: statusLabels[status])).toList(),
+          tabs: statuses
+              .map((status) => Tab(text: statusLabels[status]))
+              .toList(),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
-              children: statuses.map((status) => _buildTabView(status)).toList(),
+              children:
+                  statuses.map((status) => _buildTabView(status)).toList(),
             ),
+    );
+  }
+}
+
+// Nueva pantalla para subir la imagen 'después' y finalizar la propuesta
+class FinishProposalPage extends StatefulWidget {
+  final dynamic proposal;
+  const FinishProposalPage({Key? key, required this.proposal})
+      : super(key: key);
+
+  @override
+  _FinishProposalPageState createState() => _FinishProposalPageState();
+}
+
+class _FinishProposalPageState extends State<FinishProposalPage> {
+  bool isSubmitting = false;
+  bool isUploadingImage = false;
+  String? _uploadedImageUrl;
+
+  final ImagePicker _picker = ImagePicker();
+
+  /// Función para subir la imagen a Imgur y obtener la URL resultante.
+  Future<String?> _uploadImage(File imageFile) async {
+    final uri = Uri.parse('https://api.imgur.com/3/upload');
+    final request = http.MultipartRequest('POST', uri);
+    request.files
+        .add(await http.MultipartFile.fromPath('image', imageFile.path));
+    // Reemplaza con tu Client-ID real de Imgur
+    request.headers['Authorization'] = 'Client-ID 32794ee601322f0';
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      final responseBody = await response.stream.bytesToString();
+      final data = json.decode(responseBody);
+      if (data['success'] == true) {
+        return data['data']['link'];
+      }
+    }
+    return null;
+  }
+
+  /// Permite al usuario seleccionar una imagen (de cámara o galería) y la sube a Imgur.
+  Future<void> _pickAndUploadImage() async {
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Selecciona origen de la imagen"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text("Cámara"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text("Galería"),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return; // Se canceló la selección.
+
+    final pickedFile = await _picker.pickImage(source: source);
+    if (pickedFile != null) {
+      setState(() {
+        isUploadingImage = true;
+      });
+      final File imageFile = File(pickedFile.path);
+      String? uploadedUrl = await _uploadImage(imageFile);
+      if (uploadedUrl != null) {
+        setState(() {
+          _uploadedImageUrl = uploadedUrl;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al subir la imagen")),
+        );
+      }
+      setState(() {
+        isUploadingImage = false;
+      });
+    }
+  }
+
+  /// Envía la propuesta finalizada usando la URL de la imagen subida.
+  /// Primero se actualiza la imagen (endpoint: upload-imagen-despues)
+  /// y luego se finaliza la propuesta actualizando solo "status" a "finished".
+  Future<void> _uploadAndFinishProposal() async {
+    if (_uploadedImageUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Por favor, selecciona y sube una imagen primero")));
+      return;
+    }
+    setState(() {
+      isSubmitting = true;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) {
+      setState(() {
+        isSubmitting = false;
+      });
+      return;
+    }
+
+    // Primer endpoint: subir la imagen "después"
+    final uploadUrl = Uri.parse(
+        'https://apifixya.onrender.com/proposals/${widget.proposal['id']}/upload-imagen-despues');
+    final uploadBody = jsonEncode({
+      'imagen_despues': _uploadedImageUrl,
+    });
+    try {
+      final uploadResponse = await http.put(
+        uploadUrl,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: uploadBody,
+      );
+      if (uploadResponse.statusCode != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al subir la imagen")),
+        );
+        setState(() {
+          isSubmitting = false;
+        });
+        return;
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error de conexión al subir imagen")),
+      );
+      setState(() {
+        isSubmitting = false;
+      });
+      return;
+    }
+
+    // Segundo endpoint: actualizar la propuesta para finalizar (solo actualizando "status")
+    final finishUrl = Uri.parse(
+        'https://apifixya.onrender.com/proposals/${widget.proposal['id']}');
+    final finishBody = jsonEncode({
+      'status': 'finished',
+    });
+    try {
+      final finishResponse = await http.put(
+        finishUrl,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: finishBody,
+      );
+      if (finishResponse.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Servicio finalizado")),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al finalizar el servicio")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error de conexión al finalizar")),
+      );
+    } finally {
+      setState(() {
+        isSubmitting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Finalizar Servicio")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Mostrar imagen seleccionada o botón para elegir imagen
+            if (_uploadedImageUrl != null)
+              Image.network(
+                _uploadedImageUrl!,
+                height: 200,
+                fit: BoxFit.cover,
+              )
+            else
+              ElevatedButton(
+                onPressed: isUploadingImage ? null : _pickAndUploadImage,
+                child: isUploadingImage
+                    ? const CircularProgressIndicator()
+                    : const Text("Seleccionar imagen"),
+              ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: isSubmitting ? null : _uploadAndFinishProposal,
+              child: isSubmitting
+                  ? const CircularProgressIndicator()
+                  : const Text("Subir y finalizar"),
+            )
+          ],
+        ),
+      ),
     );
   }
 }
