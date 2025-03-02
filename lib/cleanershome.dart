@@ -22,6 +22,11 @@ class CleanersHome extends StatefulWidget {
 class _CleanersHomeState extends State<CleanersHome> {
   List<dynamic> services = [];
   String userName = "Usuario";
+  String userEmail = "";
+  double? latitude;
+  double? longitude;
+  int? auditorId; // FK del auditor asignado (null si no asignado)
+  bool isVerifiqued = false;
   bool _isLoading = true;
   int _selectedIndex = 0;
 
@@ -111,6 +116,12 @@ class _CleanersHomeState extends State<CleanersHome> {
         final data = json.decode(response.body);
         setState(() {
           userName = data['name'] ?? 'Usuario';
+          userEmail = data['email'] ?? '';
+          // Se asume que el endpoint devuelve 'auditor_id' e 'is_verifiqued'
+          auditorId = data['auditor_id'];
+          isVerifiqued = data['is_verifiqued'] ?? false;
+          latitude = data['latitude'];
+          longitude = data['longitude'];
         });
       }
     } catch (e) {
@@ -216,6 +227,62 @@ class _CleanersHomeState extends State<CleanersHome> {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  /// Muestra el diálogo de selección de auditor con infinite scroll
+  Future<void> _showAuditorSelectionDialog() async {
+    final selectedAuditorId = await showDialog<int>(
+      context: context,
+      builder: (context) => const AuditorSelectionDialog(),
+    );
+    if (selectedAuditorId != null) {
+      _requestVerification(selectedAuditorId);
+    }
+  }
+
+  /// Envía la solicitud de verificación actualizando el cleaner sin modificar la contraseña
+  Future<void> _requestVerification(int selectedAuditorId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+
+    final Map<String, dynamic> body = {
+      "name": userName,
+      "email": userEmail,
+      "latitude": latitude ?? 0,
+      "longitude": longitude ?? 0,
+      // Aquí se supone que la verificación se realiza en otro lugar,
+      // por lo que se mantiene is_verifiqued como false hasta que sea true externamente.
+      "is_verifiqued": false,
+      "auditor_id": selectedAuditorId,
+    };
+
+    try {
+      final response = await http.put(
+        Uri.parse('https://apifixya.onrender.com/cleaners/me'),
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(body),
+      );
+      if (response.statusCode == 200) {
+        // Actualizamos el estado local luego de seleccionar el auditor.
+        // El botón "Solicitar verificación" desaparecerá porque auditorId ya no es null.
+        setState(() {
+          auditorId = selectedAuditorId;
+          // isVerifiqued se mantiene en false hasta que se actualice en otro proceso.
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Auditor seleccionado. Verificación pendiente.")),
+        );
+      } else {
+        print("Error en la solicitud de verificación: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error en la solicitud de verificación: $e");
+    }
   }
 
   /// Construye el contenido principal (lista de servicios)
@@ -420,17 +487,128 @@ class _CleanersHomeState extends State<CleanersHome> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          // Navega a la pantalla para añadir servicio y, si se añade uno nuevo, actualiza la lista.
-          final result = await Navigator.pushNamed(context, '/addService');
-          if (result == true) {
-            await _getServices();
-          }
-        },
-        child: const Icon(Icons.add),
+      // Lógica del botón flotante:
+      // - Si auditorId es null, se muestra el botón "Solicitar verificación".
+      // - Si auditorId no es null y isVerifiqued es true, se muestra el botón para agregar servicio.
+      // - Si auditorId no es null y isVerifiqued es false, no se muestra ningún botón.
+      floatingActionButton: (auditorId == null)
+          ? FloatingActionButton.extended(
+              onPressed: _showAuditorSelectionDialog,
+              label: const Text("Solicitar verificación"),
+              icon: const Icon(Icons.verified_user),
+            )
+          : (isVerifiqued
+              ? FloatingActionButton(
+                  onPressed: () async {
+                    // Navega a la pantalla para añadir servicio y, si se añade uno nuevo, actualiza la lista.
+                    final result = await Navigator.pushNamed(context, '/addService');
+                    if (result == true) {
+                      await _getServices();
+                    }
+                  },
+                  child: const Icon(Icons.add),
+                )
+              : null),
+    );
+  }
+}
+
+/// Widget para mostrar un diálogo con infinite scrolling de auditores
+class AuditorSelectionDialog extends StatefulWidget {
+  const AuditorSelectionDialog({Key? key}) : super(key: key);
+
+  @override
+  _AuditorSelectionDialogState createState() => _AuditorSelectionDialogState();
+}
+
+class _AuditorSelectionDialogState extends State<AuditorSelectionDialog> {
+  List<dynamic> auditors = [];
+  int page = 1;
+  bool isLoading = false;
+  bool hasMore = true;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAuditors();
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 200 &&
+          !isLoading &&
+          hasMore) {
+        _fetchAuditors();
+      }
+    });
+  }
+
+  Future<void> _fetchAuditors() async {
+    setState(() {
+      isLoading = true;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    // Ajusta la URL y parámetros según tu API.
+    final response = await http.get(
+      Uri.parse('https://apifixya.onrender.com/auditors/all'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> fetchedAuditors = json.decode(response.body);
+      setState(() {
+        page++;
+        isLoading = false;
+        if (fetchedAuditors.isEmpty) {
+          hasMore = false;
+        } else {
+          auditors.addAll(fetchedAuditors);
+        }
+      });
+    } else {
+      setState(() {
+        isLoading = false;
+      });
+      print("Error al obtener auditores: ${response.statusCode}");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Selecciona un auditor"),
+      content: Container(
+        width: double.maxFinite,
+        height: 400, // Altura fija para el diálogo
+        child: ListView.builder(
+          controller: _scrollController,
+          itemCount: auditors.length + (hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index < auditors.length) {
+              final auditor = auditors[index];
+              return ListTile(
+                title: Text(auditor['name'] ?? 'Sin nombre'),
+                subtitle: Text(auditor['email'] ?? ''),
+                onTap: () {
+                  Navigator.pop(context, auditor['auditor_id']);
+                },
+              );
+            } else {
+              // Indicador de carga al final de la lista
+              return const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+          },
+        ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 }
 

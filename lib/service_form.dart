@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'location_selection_screen.dart';
-import 'add_card_screen.dart'; // Asegúrate de que la ruta sea la correcta
+
+// Credenciales de Mercado Pago (Sandbox)
+const String mercadoPagoAccessToken = 'TEST-4550829005870809-022619-790e71ca5222fe1f9614e137d9ff2cc8-1155815200';
+
 
 /// Pantalla para llenar los datos iniciales del servicio.
 class ServiceFormScreen extends StatefulWidget {
@@ -20,8 +24,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   final TextEditingController _timeController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
-  DateTime? _selectedDate; // Guarda la fecha seleccionada
+  DateTime? _selectedDate;
 
   @override
   void dispose() {
@@ -34,12 +37,10 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar con flecha para volver a la pantalla anterior
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context)),
         title: const Text('Servicio'),
       ),
       backgroundColor: Colors.white,
@@ -49,10 +50,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             const SizedBox(height: 40),
             _buildServiceCard(),
             const SizedBox(height: 15),
-            Form(
-              key: _formKey,
-              child: _buildForm(),
-            ),
+            Form(key: _formKey, child: _buildForm()),
             const SizedBox(height: 20),
             _buildNextButton(context),
           ],
@@ -63,7 +61,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
 
   Widget _buildServiceCard() {
     return Card(
-      color: const Color(0xFF94D6FF), // Azul insignia
+      color: const Color(0xFF94D6FF),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 3,
       margin: const EdgeInsets.all(16),
@@ -72,27 +70,22 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.service['name'] ?? 'Servicio limpieza',
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
+            Text(widget.service['name'] ?? 'Servicio limpieza',
+                style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
             const SizedBox(height: 5),
-            Text(
-              widget.service['address'] ??
-                  'C. 111 315, Santa Rosa, 97279 Mérida, Yuc.',
-              style: const TextStyle(fontSize: 14, color: Colors.white70),
-            ),
+            Text(widget.service['address'] ??
+                'C. 111 315, Santa Rosa, 97279 Mérida, Yuc.'),
             const SizedBox(height: 10),
             Row(
               children: [
-                Text(
-                  '\$${widget.service['price'] ?? 'XXXXX'}',
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green),
-                ),
+                Text('\$${widget.service['price'] ?? 'XXXXX'}',
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green)),
                 const Text(' aprox',
                     style: TextStyle(fontSize: 14, color: Colors.green)),
                 const Spacer(),
@@ -121,25 +114,21 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Datos del servicio',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Datos del servicio',
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            // Muestra el nombre del servicio (no editable)
             Padding(
               padding: const EdgeInsets.only(bottom: 15),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  widget.service['name'] ?? 'Servicio sin nombre',
-                  style: const TextStyle(fontSize: 16),
-                ),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10)),
+                child: Text(widget.service['name'] ??
+                    'Servicio sin nombre',
+                    style: const TextStyle(fontSize: 16)),
               ),
             ),
             _buildDateField(),
@@ -162,19 +151,15 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon:
-              const Icon(Icons.calendar_today, color: Color(0xFF01497C)),
+          suffixIcon: const Icon(Icons.calendar_today, color: Color(0xFF01497C)),
         ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Selecciona una fecha';
-          }
-          return null;
-        },
+        validator: (value) =>
+            (value == null || value.isEmpty)
+                ? 'Selecciona una fecha'
+                : null,
         onTap: () async {
           final today = DateTime.now();
           final firstDate = DateTime(today.year, today.month, today.day);
-          // Se define un mapeo para convertir weekday a nombre en español.
           final weekDays = {
             1: "Lunes",
             2: "Martes",
@@ -184,17 +169,14 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             6: "Sábado",
             7: "Domingo"
           };
-          // Se obtienen los días permitidos desde el JSON del servicio.
           final allowedDays = widget.service['schedule']?['days'] ?? [];
           DateTime? pickedDate = await showDatePicker(
             context: context,
             initialDate: today,
             firstDate: firstDate,
             lastDate: DateTime(2030),
-            selectableDayPredicate: (date) {
-              // Solo se permiten los días cuyo nombre esté en la lista de permitidos.
-              return allowedDays.contains(weekDays[date.weekday]);
-            },
+            selectableDayPredicate: (date) =>
+                allowedDays.contains(weekDays[date.weekday]),
           );
           if (pickedDate != null) {
             setState(() {
@@ -220,68 +202,53 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon:
-              const Icon(Icons.access_time, color: Color(0xFF01497C)),
+          suffixIcon: const Icon(Icons.access_time, color: Color(0xFF01497C)),
         ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Selecciona una hora';
-          }
-          return null;
-        },
+        validator: (value) =>
+            (value == null || value.isEmpty)
+                ? 'Selecciona una hora'
+                : null,
         onTap: () async {
           if (_selectedDate == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Selecciona primero una fecha")),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text("Selecciona primero una fecha")));
             return;
           }
-          TimeOfDay? pickedTime = await showTimePicker(
-            context: context,
-            initialTime: TimeOfDay.now(),
-          );
+          TimeOfDay? pickedTime =
+              await showTimePicker(context: context, initialTime: TimeOfDay.now());
           if (pickedTime != null) {
-            // Se obtienen los horarios permitidos desde el JSON del servicio.
-            final allowedStartStr = widget.service['schedule']?['startTime'] ?? "00:00";
-            final allowedEndStr = widget.service['schedule']?['endTime'] ?? "23:59";
+            final allowedStartStr =
+                widget.service['schedule']?['startTime'] ?? "00:00";
+            final allowedEndStr =
+                widget.service['schedule']?['endTime'] ?? "23:59";
             final allowedStartParts = allowedStartStr.split(":");
             final allowedEndParts = allowedEndStr.split(":");
             final allowedStartTime = TimeOfDay(
-              hour: int.parse(allowedStartParts[0]),
-              minute: int.parse(allowedStartParts[1]),
-            );
+                hour: int.parse(allowedStartParts[0]),
+                minute: int.parse(allowedStartParts[1]));
             final allowedEndTime = TimeOfDay(
-              hour: int.parse(allowedEndParts[0]),
-              minute: int.parse(allowedEndParts[1]),
-            );
-
-            // Función para convertir TimeOfDay a minutos desde medianoche.
+                hour: int.parse(allowedEndParts[0]),
+                minute: int.parse(allowedEndParts[1]));
             int toMinutes(TimeOfDay time) => time.hour * 60 + time.minute;
-
             if (toMinutes(pickedTime) < toMinutes(allowedStartTime) ||
                 toMinutes(pickedTime) > toMinutes(allowedEndTime)) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("La hora seleccionada no está dentro del horario permitido")),
-              );
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text("La hora seleccionada no está dentro del horario permitido")));
               return;
             }
-
-            // Validación adicional: si la fecha seleccionada es hoy, la hora debe ser futura.
             final now = DateTime.now();
             if (_selectedDate!.year == now.year &&
                 _selectedDate!.month == now.month &&
                 _selectedDate!.day == now.day) {
               final selectedDateTime = DateTime(
-                _selectedDate!.year,
-                _selectedDate!.month,
-                _selectedDate!.day,
-                pickedTime.hour,
-                pickedTime.minute,
-              );
+                  _selectedDate!.year,
+                  _selectedDate!.month,
+                  _selectedDate!.day,
+                  pickedTime.hour,
+                  pickedTime.minute);
               if (selectedDateTime.isBefore(now)) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("La hora seleccionada ya pasó")),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("La hora seleccionada ya pasó")));
                 return;
               }
             }
@@ -308,17 +275,14 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           fillColor: Colors.grey.shade200,
           suffixIcon: const Icon(Icons.map, color: Color(0xFF01497C)),
         ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Selecciona una ubicación';
-          }
-          return null;
-        },
+        validator: (value) =>
+            (value == null || value.isEmpty)
+                ? 'Selecciona una ubicación'
+                : null,
         onTap: () async {
           final selectedAddress = await Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (context) => const LocationSelectionScreen()),
+            MaterialPageRoute(builder: (context) => const LocationSelectionScreen()),
           );
           if (selectedAddress != null) {
             setState(() {
@@ -337,11 +301,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         width: double.infinity,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF01497C),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
+              backgroundColor: const Color(0xFF01497C),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              padding: const EdgeInsets.symmetric(vertical: 16)),
           onPressed: () {
             if (_formKey.currentState?.validate() ?? false) {
               Navigator.push(
@@ -349,9 +311,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                 MaterialPageRoute(
                   builder: (context) => AdditionalQuestionsScreen(
                     service: widget.service,
-                    date: _selectedDate != null
-                        ? _selectedDate!.toIso8601String()
-                        : '',
+                    date: _selectedDate != null ? _selectedDate!.toIso8601String() : '',
                     time: _timeController.text,
                     direccion: _addressController.text,
                     tipodeservicio: widget.service['name'],
@@ -368,7 +328,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   }
 }
 
-/// Pantalla para completar los últimos pasos y crear la propuesta.
+/// Pantalla para completar los últimos pasos y seleccionar el método de pago (usando Mercado Pago).
 class AdditionalQuestionsScreen extends StatefulWidget {
   final Map<String, dynamic> service;
   final String date;
@@ -386,25 +346,16 @@ class AdditionalQuestionsScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<AdditionalQuestionsScreen> createState() =>
-      _AdditionalQuestionsScreenState();
+  State<AdditionalQuestionsScreen> createState() => _AdditionalQuestionsScreenState();
 }
 
 class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
   bool? _usuarioEnCasa;
   bool? _servicioConstante;
-  List<dynamic> _creditCards = [];
-  dynamic _selectedCreditCard;
-  final TextEditingController _additionalDescriptionController =
-      TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchCreditCards();
-  }
+  String? _paymentMethod; // Ahora será "mercadopago"
+  String? _paymentReferenceId;
+  final TextEditingController _additionalDescriptionController = TextEditingController();
 
   @override
   void dispose() {
@@ -412,152 +363,92 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchCreditCards() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
+  /// Lanza el Checkout de Mercado Pago: crea la preferencia y redirige al usuario.
+  Future<void> _launchMercadoPagoCheckout() async {
+    final preferenceBody = jsonEncode({
+      "items": [
+        {
+          "title": widget.service['name'] ?? "Servicio",
+          "quantity": 1,
+          "currency_id": "USD", // Ajusta la moneda según necesites
+          "unit_price": widget.service['price'] != null
+              ? double.tryParse(widget.service['price'].toString()) ?? 10.00
+              : 10.00,
+        }
+      ],
+      "back_urls": {
+        "success": "https://apifixya.onrender.com/mercadopago/success",
+        "failure": "https://apifixya.onrender.com/mercadopago/failure",
+        "pending": "https://apifixya.onrender.com/mercadopago/pending",
+      },
+      "auto_return": "approved"
+    });
 
-      final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/creditcards/user'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
+    final response = await http.post(
+      Uri.parse("https://api.mercadopago.com/checkout/preferences?access_token=$mercadoPagoAccessToken"),
+      headers: {"Content-Type": "application/json"},
+      body: preferenceBody,
+    );
 
-      if (response.statusCode == 200) {
-        setState(() {
-          _creditCards = jsonDecode(response.body);
-        });
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final responseJson = jsonDecode(response.body);
+      setState(() {
+        _paymentMethod = "mercadopago";
+        _paymentReferenceId = responseJson['id'].toString();
+      });
+
+      final initPoint = responseJson['init_point'];
+      final Uri checkoutUri = Uri.parse(initPoint);
+      if (await canLaunchUrl(checkoutUri)) {
+        await launchUrl(checkoutUri, mode: LaunchMode.externalApplication);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text('Error al obtener las tarjetas: ${response.statusCode}')),
+          const SnackBar(content: Text("No se pudo abrir el Checkout de Mercado Pago"))
         );
       }
-    } catch (e) {
+    } else {
+      // Imprime el detalle del error en consola y muestra el detalle en un SnackBar
+      print("Error: ${response.statusCode}");
+      print("Detalle: ${response.body}");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text(
+            "Error al crear preferencia de Mercado Pago: ${response.statusCode}\nDetalle: ${response.body}",
+            textAlign: TextAlign.center,
+          ),
+        )
       );
     }
   }
 
-  /// Envía la propuesta usando el token y la id del usuario actualmente logueado.
-  Future<void> _submitProposal() async {
-    if (!(_formKey.currentState?.validate() ?? false) ||
-        _usuarioEnCasa == null ||
-        _servicioConstante == null ||
-        _selectedCreditCard == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Todos los campos son obligatorios")),
-      );
-      return;
-    }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      // Se asume que el endpoint de login guardó la id del usuario actual en SharedPreferences.
-      final userId = prefs.getInt('userId') ?? 0;
-
-      final proposalData = {
-        "serviceId": widget.service['id'] ?? 0,
-        "userId": userId,
-        "date": widget.date,
-        "status": "pending",
-        "direccion": widget.direccion,
-        "cardId": _selectedCreditCard['id'],
-        "Descripcion": _additionalDescriptionController.text,
-        "UsuarioEnCasa": _usuarioEnCasa,
-        "servicioConstante": _servicioConstante,
-        "tipodeservicio": widget.tipodeservicio,
-      };
-
-      final response = await http.post(
-        Uri.parse('https://apifixya.onrender.com/proposals'),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-        body: jsonEncode(proposalData),
-      );
-
-      if (response.statusCode == 201) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Propuesta creada correctamente')),
-          );
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${response.statusCode}')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  Widget _buildCreditCardDropdown() {
-    if (_creditCards.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('No tienes tarjetas guardadas.'),
-          const SizedBox(height: 10),
-          ElevatedButton(
+  Widget _buildPaymentOptionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Seleccione el método de pago:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF01497C),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25)),
+              backgroundColor: Colors.blueAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddCardScreen()),
-              );
-              _fetchCreditCards();
-            },
-            child: const Text('Agregar Tarjeta',
-                style: TextStyle(fontSize: 16, color: Colors.white)),
+            onPressed: _launchMercadoPagoCheckout,
+            child: const Text('Pagar con Mercado Pago', style: TextStyle(fontSize: 16, color: Colors.white)),
           ),
-        ],
-      );
-    }
-
-    return DropdownButtonFormField<dynamic>(
-      decoration: InputDecoration(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        filled: true,
-        fillColor: Colors.grey.shade200,
-      ),
-      value: _selectedCreditCard,
-      hint: const Text('Seleccione el método de pago'),
-      items: _creditCards.map<DropdownMenuItem<dynamic>>((card) {
-        return DropdownMenuItem<dynamic>(
-          value: card,
-          child: Text(card['nickname'] ?? 'Tarjeta ${card['id']}'),
-        );
-      }).toList(),
-      validator: (value) {
-        if (value == null) {
-          return 'Seleccione un método de pago';
-        }
-        return null;
-      },
-      onChanged: (value) {
-        setState(() {
-          _selectedCreditCard = value;
-        });
-      },
+        ),
+        const SizedBox(height: 10),
+        if (_paymentReferenceId != null)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(10)),
+            child: Text("Método: $_paymentMethod\nReferencia: $_paymentReferenceId", style: const TextStyle(fontSize: 16)),
+          ),
+      ],
     );
   }
 
@@ -572,25 +463,67 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
           filled: true,
           fillColor: Colors.grey.shade200,
         ),
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'Este campo es obligatorio';
-          }
-          return null;
-        },
+        validator: (value) => (value == null || value.trim().isEmpty) ? 'Este campo es obligatorio' : null,
       ),
     );
+  }
+
+  /// Envía la propuesta incluyendo el método y la referencia del pago.
+  Future<void> _submitProposal() async {
+    if (!(_formKey.currentState?.validate() ?? false) ||
+        _usuarioEnCasa == null ||
+        _servicioConstante == null ||
+        _paymentReferenceId == null ||
+        _paymentMethod == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Todos los campos son obligatorios")));
+      return;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final userId = prefs.getInt('userId') ?? 0;
+
+      final proposalData = {
+        "serviceId": widget.service['id'] ?? 0,
+        "userId": userId,
+        "date": widget.date,
+        "status": "pending",
+        "direccion": widget.direccion,
+        "Descripcion": _additionalDescriptionController.text,
+        "UsuarioEnCasa": _usuarioEnCasa,
+        "servicioConstante": _servicioConstante,
+        "tipodeservicio": widget.tipodeservicio,
+        "paymentMethod": _paymentMethod,
+        "paymentReferenceId": _paymentReferenceId,
+      };
+
+      final response = await http.post(
+        Uri.parse('https://apifixya.onrender.com/proposals'),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token"
+        },
+        body: jsonEncode(proposalData),
+      );
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Propuesta creada correctamente')));
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${response.statusCode}')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar con flecha para volver a la pantalla anterior
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
         title: const Text('Últimos pasos'),
       ),
       backgroundColor: Colors.white,
@@ -601,9 +534,7 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
             key: _formKey,
             child: Card(
               color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               elevation: 3,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -611,12 +542,9 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 40),
-                    const Text('Últimos pasos',
-                        style:
-                            TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const Text('Últimos pasos', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
-                    const Text(
-                        'Al momento de realizar el servicio, ¿se encontrará en la ubicación?'),
+                    const Text('Al momento de realizar el servicio, ¿se encontrará en la ubicación?'),
                     Row(
                       children: [
                         Expanded(
@@ -676,22 +604,20 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    _buildCreditCardDropdown(),
-                    const SizedBox(height: 10),
-                    _buildTextField(_additionalDescriptionController,
-                        'Describe algo adicional al formulario'),
+                    _buildPaymentOptionsSection(),
+                    _buildTextField(_additionalDescriptionController, 'Describe algo adicional al formulario'),
                     const SizedBox(height: 20),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF01497C),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF01497C),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: _submitProposal,
+                        child: const Text('Solicitar', style: TextStyle(fontSize: 16, color: Colors.white)),
                       ),
-                      onPressed: _submitProposal,
-                      child: const Text('Solicitar',
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.white)),
                     ),
                   ],
                 ),

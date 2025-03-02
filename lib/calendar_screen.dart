@@ -19,7 +19,7 @@ class _ProposalsPageState extends State<ProposalsPage>
   bool isLoading = true;
   late TabController _tabController;
 
-  // Lista de estados en el orden deseado: pendiente, aceptada, en progreso, rechazada.
+  // Lista de estados en el orden deseado: pendiente, aceptada, en progreso, rechazada, finalizada.
   final List<String> statuses = [
     "pending",
     "accepted",
@@ -56,9 +56,9 @@ class _ProposalsPageState extends State<ProposalsPage>
       });
       return;
     }
-    // Se usa el endpoint con size muy grande para obtener todas las propuestas
-    final Uri url = Uri.parse(
-        'https://apifixya.onrender.com/proposals/my?size=40000000000');
+    // Se usa el endpoint con un size muy grande para obtener todas las propuestas
+    final Uri url =
+        Uri.parse('https://apifixya.onrender.com/proposals/my?size=40000000000');
     try {
       final response = await http.get(
         url,
@@ -134,7 +134,7 @@ class _ProposalsPageState extends State<ProposalsPage>
     return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
   }
 
-  // Filtra las propuestas según el estado recibido, eliminando espacios y forzando String.
+  // Filtra las propuestas según el estado recibido
   List<dynamic> _filterProposalsByStatus(String status) {
     return proposals.where((proposal) {
       final currentStatus = (proposal['status'] ?? '').toString().trim();
@@ -166,11 +166,9 @@ class _ProposalsPageState extends State<ProposalsPage>
         statusColor = Colors.black;
     }
 
-    // Condición para mostrar el botón de confirmar:
-    // La propuesta debe estar en estado "accepted" y además debe haberse
-    // indicado que el cleaner presionó "Comenzar"
+    // Se actualiza la referencia a la propiedad según el modelo (cleaner_started)
     bool showConfirm = proposal['status'] == 'accepted' &&
-        (proposal['cleanerStarted'] ?? false) == true;
+        (proposal['cleaner_started'] ?? false) == true;
 
     // Si "cleaner_finished" es true y el estado aún no es "finished", se muestra el botón para finalizar
     bool showFinish = (proposal['cleaner_finished'] ?? false) == true &&
@@ -232,7 +230,6 @@ class _ProposalsPageState extends State<ProposalsPage>
                 alignment: Alignment.centerRight,
                 child: ElevatedButton(
                   onPressed: () async {
-                    // Navega a la pantalla para subir imagen y finalizar
                     final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -240,7 +237,6 @@ class _ProposalsPageState extends State<ProposalsPage>
                             FinishProposalPage(proposal: proposal),
                       ),
                     );
-                    // Si se finalizó correctamente, se refrescan las propuestas
                     if (result == true) {
                       _fetchProposals();
                     }
@@ -296,7 +292,6 @@ class _ProposalsPageState extends State<ProposalsPage>
   }
 }
 
-// Nueva pantalla para subir la imagen 'después' y finalizar la propuesta
 class FinishProposalPage extends StatefulWidget {
   final dynamic proposal;
   const FinishProposalPage({Key? key, required this.proposal})
@@ -309,7 +304,8 @@ class FinishProposalPage extends StatefulWidget {
 class _FinishProposalPageState extends State<FinishProposalPage> {
   bool isSubmitting = false;
   bool isUploadingImage = false;
-  String? _uploadedImageUrl;
+  // Lista para almacenar de 1 a 3 URLs de imágenes
+  List<String> _uploadedImageUrls = [];
 
   final ImagePicker _picker = ImagePicker();
 
@@ -332,8 +328,15 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
     return null;
   }
 
-  /// Permite al usuario seleccionar una imagen (de cámara o galería) y la sube a Imgur.
+  /// Permite seleccionar y subir una imagen, acumulando la URL en la lista.
   Future<void> _pickAndUploadImage() async {
+    if (_uploadedImageUrls.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Solo puedes seleccionar hasta 3 imágenes")),
+      );
+      return;
+    }
+
     final ImageSource? source = await showDialog<ImageSource>(
       context: context,
       builder: (context) => AlertDialog(
@@ -351,7 +354,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       ),
     );
 
-    if (source == null) return; // Se canceló la selección.
+    if (source == null) return; // Cancelado.
 
     final pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
@@ -362,7 +365,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       String? uploadedUrl = await _uploadImage(imageFile);
       if (uploadedUrl != null) {
         setState(() {
-          _uploadedImageUrl = uploadedUrl;
+          _uploadedImageUrls.add(uploadedUrl);
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -375,13 +378,11 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
     }
   }
 
-  /// Envía la propuesta finalizada usando la URL de la imagen subida.
-  /// Primero se actualiza la imagen (endpoint: upload-imagen-despues)
-  /// y luego se finaliza la propuesta actualizando solo "status" a "finished".
+  /// Envía la propuesta finalizada usando la lista de URLs.
   Future<void> _uploadAndFinishProposal() async {
-    if (_uploadedImageUrl == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Por favor, selecciona y sube una imagen primero")));
+    if (_uploadedImageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Por favor, selecciona y sube al menos una imagen")));
       return;
     }
     setState(() {
@@ -400,7 +401,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
     final uploadUrl = Uri.parse(
         'https://apifixya.onrender.com/proposals/${widget.proposal['id']}/upload-imagen-despues');
     final uploadBody = jsonEncode({
-      'imagen_despues': _uploadedImageUrl,
+      'imagen_despues': _uploadedImageUrls,
     });
     try {
       final uploadResponse = await http.put(
@@ -413,7 +414,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       );
       if (uploadResponse.statusCode != 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error al subir la imagen")),
+          const SnackBar(content: Text("Error al subir las imágenes")),
         );
         setState(() {
           isSubmitting = false;
@@ -422,7 +423,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error de conexión al subir imagen")),
+        const SnackBar(content: Text("Error de conexión al subir imágenes")),
       );
       setState(() {
         isSubmitting = false;
@@ -430,7 +431,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       return;
     }
 
-    // Segundo endpoint: actualizar la propuesta para finalizar (solo actualizando "status")
+    // Segundo endpoint: actualizar la propuesta para finalizar (cambiando status a finished)
     final finishUrl = Uri.parse(
         'https://apifixya.onrender.com/proposals/${widget.proposal['id']}');
     final finishBody = jsonEncode({
@@ -472,31 +473,48 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       appBar: AppBar(title: const Text("Finalizar Servicio")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Mostrar imagen seleccionada o botón para elegir imagen
-            if (_uploadedImageUrl != null)
-              Image.network(
-                _uploadedImageUrl!,
-                height: 200,
-                fit: BoxFit.cover,
-              )
-            else
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Mostrar miniaturas de las imágenes subidas
+              if (_uploadedImageUrls.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _uploadedImageUrls
+                      .map((url) => Image.network(
+                            url,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ))
+                      .toList(),
+                )
+              else
+                Container(
+                  height: 120,
+                  alignment: Alignment.center,
+                  child: const Text("No hay imágenes seleccionadas"),
+                ),
+              const SizedBox(height: 16),
+              // Botón para agregar imágenes (si hay menos de 3)
+              if (_uploadedImageUrls.length < 3)
+                ElevatedButton(
+                  onPressed: isUploadingImage ? null : _pickAndUploadImage,
+                  child: isUploadingImage
+                      ? const CircularProgressIndicator()
+                      : const Text("Agregar imagen"),
+                ),
+              const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: isUploadingImage ? null : _pickAndUploadImage,
-                child: isUploadingImage
+                onPressed: isSubmitting ? null : _uploadAndFinishProposal,
+                child: isSubmitting
                     ? const CircularProgressIndicator()
-                    : const Text("Seleccionar imagen"),
-              ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: isSubmitting ? null : _uploadAndFinishProposal,
-              child: isSubmitting
-                  ? const CircularProgressIndicator()
-                  : const Text("Subir y finalizar"),
-            )
-          ],
+                    : const Text("Subir y finalizar"),
+              )
+            ],
+          ),
         ),
       ),
     );

@@ -150,8 +150,7 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  "Limpieza iniciada, esperando confirmación del usuario")),
+              content: Text("Limpieza iniciada, esperando confirmación del usuario")),
         );
         _fetchProposals();
         Navigator.pop(context);
@@ -207,8 +206,7 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
                             children: [
                               Text("Dirección: ${proposal['direccion'] ?? ''}"),
                               Text("Fecha: ${proposal['date'] ?? ''}"),
-                              Text(
-                                  "Estado: ${statusLabels[proposal['status']] ?? proposal['status']}"),
+                              Text("Estado: ${statusLabels[proposal['status']] ?? proposal['status']}"),
                             ],
                           ),
                           onTap: () {
@@ -235,7 +233,7 @@ class _ProposalsCleanersState extends State<ProposalsCleaners>
 }
 
 /// Pantalla de detalle para la propuesta (versión para cleaners)
-/// Se convierte en StatefulWidget para manejar la subida de imagen y finalización.
+/// Permite subir entre 1 y 3 imágenes para "imagen_antes" (almacenado como JSON) y finalizar la propuesta.
 class ProposalDetailScreen extends StatefulWidget {
   final dynamic proposal;
   final Function(int, String) onStatusChange;
@@ -254,24 +252,27 @@ class ProposalDetailScreen extends StatefulWidget {
 
 class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
   bool isUploadingImage = false;
-  String? imageBeforeUrl;
-  bool _isFinalized = false; // Variable para controlar si se finalizó la limpieza.
+  // Lista para almacenar entre 1 y 3 URLs de imagen (imagen_antes)
+  List<String> _uploadedImageUrls = [];
+  bool _isFinalized = false;
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    // Inicializamos _isFinalized en función de la propuesta.
     _isFinalized = widget.proposal['cleaner_finished'] == true;
+    // Si ya existe imagen_antes en la propuesta (como JSON), la cargamos
+    if (widget.proposal['imagen_antes'] != null && widget.proposal['imagen_antes'] is List) {
+      _uploadedImageUrls = List<String>.from(widget.proposal['imagen_antes']);
+    }
   }
 
-  /// Función para subir imagen a Imgur y obtener la URL resultante.
+  /// Función para subir la imagen a Imgur y obtener la URL resultante.
   Future<String?> _uploadImage(File imageFile) async {
     final uri = Uri.parse('https://api.imgur.com/3/upload');
     final request = http.MultipartRequest('POST', uri);
-    request.files
-        .add(await http.MultipartFile.fromPath('image', imageFile.path));
-    // Reemplaza con tu Client-ID real
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+    // Reemplaza con tu Client-ID real de Imgur
     request.headers['Authorization'] = 'Client-ID 32794ee601322f0';
     final response = await request.send();
     if (response.statusCode == 200) {
@@ -284,44 +285,44 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
     return null;
   }
 
-  /// Permite al cleaner seleccionar y subir la imagen "antes".
+  /// Permite al cleaner seleccionar y subir una imagen "antes" y acumularla en la lista.
   Future<void> _pickAndUploadImageBefore() async {
-    // Si ya se finalizó, no permitimos subir imagen nuevamente.
     if (_isFinalized) return;
-
-    // Mostrar diálogo para elegir la fuente de la imagen.
+    if (_uploadedImageUrls.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Solo puedes seleccionar hasta 3 imágenes")),
+      );
+      return;
+    }
     final ImageSource? source = await showDialog<ImageSource>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Selecciona origen de la imagen"),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context, ImageSource.camera);
-            },
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
             child: const Text("Cámara"),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context, ImageSource.gallery);
-            },
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
             child: const Text("Galería"),
           ),
         ],
       ),
     );
-
-    if (source == null) return; // Se canceló la selección.
-
+    if (source == null) return; // Cancelado.
     final pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
       setState(() {
         isUploadingImage = true;
       });
-      File imageFile = File(pickedFile.path);
+      final File imageFile = File(pickedFile.path);
       String? uploadedUrl = await _uploadImage(imageFile);
       if (uploadedUrl != null) {
-        await _updateImagenAntes(uploadedUrl);
+        setState(() {
+          _uploadedImageUrls.add(uploadedUrl);
+        });
+        await _updateImagenAntes(); // Envía al servidor la lista completa
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Error al subir la imagen")),
@@ -333,15 +334,14 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
     }
   }
 
-  /// Llama al endpoint para actualizar "imagen_antes" en la propuesta.
-  Future<void> _updateImagenAntes(String imageUrl) async {
+  /// Llama al endpoint para actualizar "imagen_antes" con el array de URLs.
+  Future<void> _updateImagenAntes() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     if (token == null) return;
     final proposalId = widget.proposal['id'];
-    final url = Uri.parse(
-        'https://apifixya.onrender.com/proposals/$proposalId/upload-imagen-antes');
-    final body = json.encode({"imagen_antes": imageUrl});
+    final url = Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/upload-imagen-antes');
+    final body = json.encode({"imagen_antes": _uploadedImageUrls});
     final response = await http.put(
       url,
       headers: {
@@ -351,11 +351,8 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
       body: body,
     );
     if (response.statusCode == 200) {
-      setState(() {
-        imageBeforeUrl = imageUrl;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Imagen subida correctamente")),
+        const SnackBar(content: Text("Imagen(s) actualizada(s) correctamente")),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -364,14 +361,20 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
     }
   }
 
-  /// Llama al endpoint para actualizar "cleaner_finished" a true.
+  /// Llama al endpoint para actualizar "cleaner_finished" a true y finalizar la propuesta.
   Future<void> _finalizeCleaning() async {
+    // Validamos que al menos se haya subido una imagen
+    if (_uploadedImageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Debe subir al menos una imagen antes de finalizar")),
+      );
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     if (token == null) return;
     final proposalId = widget.proposal['id'];
-    final url = Uri.parse(
-        'https://apifixya.onrender.com/proposals/$proposalId/update-cleaner-finished');
+    final url = Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/update-cleaner-finished');
     final body = json.encode({"cleaner_finished": true});
     final response = await http.put(
       url,
@@ -383,11 +386,10 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
     );
     if (response.statusCode == 200) {
       setState(() {
-        _isFinalized = true; // Marcamos que ya se finalizó.
+        widget.proposal['cleaner_finished'] = true;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Solicitud de finalizar hecha correctamente")),
+        const SnackBar(content: Text("Solicitud de finalizar hecha correctamente")),
       );
       Navigator.pop(context);
     } else {
@@ -400,7 +402,6 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
   @override
   Widget build(BuildContext context) {
     Widget actionButtons;
-    // Acciones según el estado de la propuesta.
     if (widget.proposal['status'] == 'pending') {
       actionButtons = Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -412,8 +413,7 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
               widget.onStatusChange(widget.proposal['id'], "accepted");
               Navigator.pop(context);
             },
-            child:
-                const Text("Aceptar", style: TextStyle(color: Colors.white)),
+            child: const Text("Aceptar", style: TextStyle(color: Colors.white)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -442,40 +442,43 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
         );
       }
     } else if (widget.proposal['status'] == 'in_progress') {
-      // Si ya se finalizó, no mostramos el menú para subir imagen ni el botón de finalizar.
-      if (_isFinalized) {
+      if (widget.proposal['cleaner_finished'] == true) {
         actionButtons = const Center(child: Text("Limpieza finalizada"));
       } else {
-        // En estado in_progress, mostramos el menú para subir "imagen antes" y finalizar.
         actionButtons = Column(
           children: [
-            if ((widget.proposal['imagen_antes'] == null ||
-                    widget.proposal['imagen_antes'] == "") &&
-                imageBeforeUrl == null)
-              ElevatedButton(
-                onPressed:
-                    isUploadingImage ? null : _pickAndUploadImageBefore,
-                child: isUploadingImage
-                    ? const CircularProgressIndicator()
-                    : const Text("Subir Imagen Antes"),
+            if (_uploadedImageUrls.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _uploadedImageUrls
+                    .map((url) => Image.network(
+                          url,
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ))
+                    .toList(),
               )
             else
-              Column(
-                children: [
-                  // En lugar de mostrar la URL, se muestra la imagen.
-                  Image.network(
-                    imageBeforeUrl ?? widget.proposal['imagen_antes'],
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: _finalizeCleaning,
-                    child: const Text("Finalizar"),
-                  ),
-                ],
-              )
+              Container(
+                height: 120,
+                alignment: Alignment.center,
+                child: const Text("No hay imágenes subidas"),
+              ),
+            const SizedBox(height: 16),
+            if (_uploadedImageUrls.length < 3)
+              ElevatedButton(
+                onPressed: isUploadingImage ? null : _pickAndUploadImageBefore,
+                child: isUploadingImage
+                    ? const CircularProgressIndicator()
+                    : const Text("Agregar imagen"),
+              ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _finalizeCleaning,
+              child: const Text("Finalizar"),
+            ),
           ],
         );
       }
