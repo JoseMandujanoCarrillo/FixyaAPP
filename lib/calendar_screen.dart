@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ class _ProposalsPageState extends State<ProposalsPage>
   List<dynamic> proposals = [];
   bool isLoading = true;
   late TabController _mainTabController;
+  Timer? _pollingTimer; // Timer para refrescar la pantalla periódicamente
 
   // Pestañas principales: Pendiente, Aceptado y Rechazado.
   final List<String> mainStatuses = [
@@ -51,6 +53,18 @@ class _ProposalsPageState extends State<ProposalsPage>
     _mainTabController =
         TabController(length: mainStatuses.length, vsync: this);
     _fetchProposals();
+
+    // Inicia el polling cada 30 segundos para refrescar las propuestas automáticamente
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _fetchProposals();
+    });
+  }
+
+  @override
+  void dispose() {
+    _mainTabController.dispose();
+    _pollingTimer?.cancel(); // Cancelar el timer para evitar fugas de memoria
+    super.dispose();
   }
 
   Future<void> _fetchProposals() async {
@@ -172,7 +186,7 @@ class _ProposalsPageState extends State<ProposalsPage>
                 List<dynamic> filtered = acceptedProposals.where((proposal) {
                   String proposalStatus =
                       (proposal['status'] ?? '').toString().trim();
-                  if (subStatus == "pending") {
+                  if (subStatus == "in_progress") {
                     return proposalStatus == "in_progress";
                   } else if (subStatus == "accepted") {
                     return proposalStatus == "accepted";
@@ -183,7 +197,8 @@ class _ProposalsPageState extends State<ProposalsPage>
                 }).toList();
                 if (filtered.isEmpty) {
                   return Center(
-                    child: Text("No hay propuestas ${acceptedSubStatusLabels[subStatus]?.toLowerCase()}"),
+                    child: Text(
+                        "No hay propuestas ${acceptedSubStatusLabels[subStatus]?.toLowerCase()}"),
                   );
                 }
                 return RefreshIndicator(
@@ -452,8 +467,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
   Future<void> _uploadAndFinishProposal() async {
     if (_uploadedImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text("Por favor, selecciona y sube al menos una imagen")));
+          content: Text("Por favor, selecciona y sube al menos una imagen")));
       return;
     }
     setState(() {
