@@ -54,7 +54,7 @@ class _ProposalsPageState extends State<ProposalsPage>
         TabController(length: mainStatuses.length, vsync: this);
     _fetchProposals();
 
-    // Inicia el polling cada 30 segundos para refrescar las propuestas automáticamente
+    // Inicia el poling porcada 30 segundos para refrescar las propuestas automáticamente
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _fetchProposals();
     });
@@ -63,7 +63,7 @@ class _ProposalsPageState extends State<ProposalsPage>
   @override
   void dispose() {
     _mainTabController.dispose();
-    _pollingTimer?.cancel(); // Cancelar el timer para evitar fugas de memoria
+    _pollingTimer?.cancel(); // Cancelar el timer para poder evitar fugas de memoria
     super.dispose();
   }
 
