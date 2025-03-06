@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 // Asegúrate de que los archivos de Login y Registro correspondan a las rutas definidas en main.dart
 // Por ejemplo, si LoginScreen y RegisterScreen están en login.dart y register.dart respectivamente,
-// puedes actualizar las importaciones o utilizar rutas nombradas.
+// puedes actualizar las importaciones o poder utilizar rutas nombradas.
 
 class Inicio extends StatelessWidget {
   const Inicio({super.key});
@@ -9,12 +9,12 @@ class Inicio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF94D6FF), // Fondo azul claro
+      backgroundColor: const Color(0xFF94D6FF), // Fondo azul claro para el inicio de sesi{on}
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const SizedBox(height: 50),
-          // Texto de bienvenida
+          // Texto de bienvenida inicial
           const Text(
             "Bienvenido a",
             style: TextStyle(
@@ -39,7 +39,7 @@ class Inicio extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 30),
-          // Botón de Iniciar Sesión
+          // Botón de Iniciar Sesión.
           ElevatedButton(
             onPressed: () {
               // Navegar a la pantalla de inicio de sesión usando ruta nombrada
