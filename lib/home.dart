@@ -206,8 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
         width: 200,
         margin: const EdgeInsets.symmetric(horizontal: 8),
         child: Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: const Color(0xFFC5E7F2), // Color modificado de la card
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,8 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 4),
                     Text(
                       description,
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -377,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Color.fromARGB(255, 0, 184, 255), // Color modificado de la barra superior
         elevation: 0,
         actions: [
           IconButton(

@@ -40,10 +40,31 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
 
+            <!-- Filtro de intent para la pantalla principal (launcher) -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Filtro para deep link a ServiceFormScreen (pago exitoso) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="cleanya" android:host="serviceForm"/>
+            </intent-filter>
+
+            <!-- Filtro para deep link a PaymentFailureScreen (pago rechazado) -->
+<!-- Filtro para deep link a Home (pago fallido) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="cleanya" android:host="failure" />
+            </intent-filter>
+
+
+
         </activity>
 
         <!-- Configuración de Flutter -->

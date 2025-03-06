@@ -8,9 +8,15 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'cleaners_profile.dart';
 import 'proposalsCleaners.dart';
+import 'select_auditor.dart';
+
+// Credenciales de Mercado Pago (Sandbox)
+const String mercadoPagoAccessToken =
+    'TEST-4550829005870809-022619-790e71ca5222fe1f9614e137d9ff2cc8-1155815200';
 
 class CleanersHome extends StatefulWidget {
   const CleanersHome({Key? key}) : super(key: key);
@@ -47,7 +53,7 @@ class _CleanersHomeState extends State<CleanersHome> {
   void initState() {
     super.initState();
     _initNotifications();
-    _loadNotifiedProposalIds(); // Carga los IDs notificados persistentes
+    _loadNotifiedProposalIds();
     _loadData();
 
     // Inicia el timer para chequear propuestas cada 30 segundos
@@ -62,13 +68,10 @@ class _CleanersHomeState extends State<CleanersHome> {
   }
 
   Future<void> _initNotifications() async {
-    // Configuración para Android
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    // Configuración para iOS
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings();
-    // Configuración general
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
@@ -77,7 +80,6 @@ class _CleanersHomeState extends State<CleanersHome> {
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  // Cargar los IDs notificados de SharedPreferences
   Future<void> _loadNotifiedProposalIds() async {
     final prefs = await SharedPreferences.getInstance();
     final List<String>? storedIds = prefs.getStringList('notifiedProposalIds');
@@ -86,7 +88,6 @@ class _CleanersHomeState extends State<CleanersHome> {
     }
   }
 
-  // Guardar los IDs notificados en SharedPreferences
   Future<void> _saveNotifiedProposalIds() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setStringList(
@@ -117,7 +118,6 @@ class _CleanersHomeState extends State<CleanersHome> {
         setState(() {
           userName = data['name'] ?? 'Usuario';
           userEmail = data['email'] ?? '';
-          // Se asume que el endpoint devuelve 'auditor_id' e 'is_verifiqued'
           auditorId = data['auditor_id'];
           isVerifiqued = data['is_verifiqued'] ?? false;
           latitude = data['latitude'];
@@ -154,7 +154,6 @@ class _CleanersHomeState extends State<CleanersHome> {
     }
   }
 
-  // Chequea periódicamente si hay nuevas propuestas
   Future<void> _checkForNewProposals() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -173,7 +172,7 @@ class _CleanersHomeState extends State<CleanersHome> {
           final int proposalId = proposal['id'];
           if (!_notifiedProposalIds.contains(proposalId)) {
             _notifiedProposalIds.add(proposalId);
-            await _saveNotifiedProposalIds(); // Guarda el ID notificado
+            await _saveNotifiedProposalIds();
 
             setState(() {
               notifications.add({
@@ -229,18 +228,28 @@ class _CleanersHomeState extends State<CleanersHome> {
     });
   }
 
-  /// Muestra el diálogo de selección de auditor con infinite scroll
-  Future<void> _showAuditorSelectionDialog() async {
-    final selectedAuditorId = await showDialog<int>(
-      context: context,
-      builder: (context) => const AuditorSelectionDialog(),
+  // Al presionar el botón de verificación se muestra el menú de planes.
+  Future<void> _navigateToPlanSelection() async {
+    final paymentResult = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PlanSelectionScreen(),
+      ),
     );
-    if (selectedAuditorId != null) {
-      _requestVerification(selectedAuditorId);
+    if (paymentResult != null) {
+      // Luego de completar el pago, se procede a seleccionar un auditor.
+      final selectedAuditorId = await Navigator.push<int>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AuditorSelectionScreen(),
+        ),
+      );
+      if (selectedAuditorId != null) {
+        _requestVerification(selectedAuditorId);
+      }
     }
   }
 
-  /// Envía la solicitud de verificación actualizando el cleaner sin modificar la contraseña
   Future<void> _requestVerification(int selectedAuditorId) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -251,8 +260,6 @@ class _CleanersHomeState extends State<CleanersHome> {
       "email": userEmail,
       "latitude": latitude ?? 0,
       "longitude": longitude ?? 0,
-      // Aquí se supone que la verificación se realiza en otro lugar,
-      // por lo que se mantiene is_verifiqued como false hasta que sea true externamente.
       "is_verifiqued": false,
       "auditor_id": selectedAuditorId,
     };
@@ -268,11 +275,8 @@ class _CleanersHomeState extends State<CleanersHome> {
         body: json.encode(body),
       );
       if (response.statusCode == 200) {
-        // Actualizamos el estado local luego de seleccionar el auditor.
-        // El botón "Solicitar verificación" desaparecerá porque auditorId ya no es null.
         setState(() {
           auditorId = selectedAuditorId;
-          // isVerifiqued se mantiene en false hasta que se actualice en otro proceso.
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Auditor seleccionado. Verificación pendiente.")),
@@ -285,7 +289,6 @@ class _CleanersHomeState extends State<CleanersHome> {
     }
   }
 
-  /// Construye el contenido principal (lista de servicios)
   Widget _buildHomeContent() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -294,10 +297,7 @@ class _CleanersHomeState extends State<CleanersHome> {
         children: [
           Text(
             "Hola, $userName!",
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -326,7 +326,6 @@ class _CleanersHomeState extends State<CleanersHome> {
     final name = service['name'] ?? 'Sin nombre';
     final description = service['description'] ?? 'Sin descripción';
 
-    // Formatea el precio según la localidad.
     String priceText;
     if (service['price'] is num) {
       final double price = (service['price'] as num).toDouble();
@@ -344,15 +343,13 @@ class _CleanersHomeState extends State<CleanersHome> {
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 8),
         child: Card(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 child: imageUrl != null && imageUrl.isNotEmpty
                     ? Image.network(
                         imageUrl,
@@ -381,8 +378,7 @@ class _CleanersHomeState extends State<CleanersHome> {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -390,15 +386,12 @@ class _CleanersHomeState extends State<CleanersHome> {
                     Text(
                       priceText,
                       style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green),
+                          fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       description,
-                      style: const TextStyle(
-                          fontSize: 14, color: Colors.grey),
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -412,11 +405,10 @@ class _CleanersHomeState extends State<CleanersHome> {
     );
   }
 
-  /// Construye el contenido según el índice seleccionado en el BottomNavigationBar
   Widget _buildPageContent() {
     switch (_selectedIndex) {
       case 1:
-        return const ProposalsCleaners(); // Pantalla de propuestas para el cleaner.
+        return const ProposalsCleaners();
       case 2:
         return const Center(child: Text('Menú'));
       case 3:
@@ -447,7 +439,6 @@ class _CleanersHomeState extends State<CleanersHome> {
             icon: const Icon(Icons.filter_alt, color: Colors.black),
             onPressed: () {},
           ),
-          // Botón de notificaciones (campanita)
           IconButton(
             icon: const Icon(Icons.notifications, color: Colors.black),
             onPressed: () {
@@ -481,27 +472,22 @@ class _CleanersHomeState extends State<CleanersHome> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today), label: 'Propuestas'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Propuestas'),
           BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'Menú'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
-      // Lógica del botón flotante:
-      // - Si auditorId es null, se muestra el botón "Solicitar verificación".
-      // - Si auditorId no es null y isVerifiqued es true, se muestra el botón para agregar servicio.
-      // - Si auditorId no es null y isVerifiqued es false, no se muestra ningún botón.
       floatingActionButton: (auditorId == null)
           ? FloatingActionButton.extended(
-              onPressed: _showAuditorSelectionDialog,
+              onPressed: _navigateToPlanSelection,
               label: const Text("Solicitar verificación"),
               icon: const Icon(Icons.verified_user),
             )
           : (isVerifiqued
               ? FloatingActionButton(
                   onPressed: () async {
-                    // Navega a la pantalla para añadir servicio y, si se añade uno nuevo, actualiza la lista.
-                    final result = await Navigator.pushNamed(context, '/addService');
+                    final result =
+                        await Navigator.pushNamed(context, '/addService');
                     if (result == true) {
                       await _getServices();
                     }
@@ -513,102 +499,177 @@ class _CleanersHomeState extends State<CleanersHome> {
   }
 }
 
-/// Widget para mostrar un diálogo con infinite scrolling de auditores
-class AuditorSelectionDialog extends StatefulWidget {
-  const AuditorSelectionDialog({Key? key}) : super(key: key);
+/// Pantalla para seleccionar un plan y realizar el pago por Mercado Pago.
+class PlanSelectionScreen extends StatefulWidget {
+  const PlanSelectionScreen({Key? key}) : super(key: key);
 
   @override
-  _AuditorSelectionDialogState createState() => _AuditorSelectionDialogState();
+  _PlanSelectionScreenState createState() => _PlanSelectionScreenState();
 }
 
-class _AuditorSelectionDialogState extends State<AuditorSelectionDialog> {
-  List<dynamic> auditors = [];
-  int page = 1;
-  bool isLoading = false;
-  bool hasMore = true;
-  final ScrollController _scrollController = ScrollController();
+class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
+  String? _selectedPlan; // "monthly" o "annual"
+  bool _isProcessing = false;
+  String? _paymentReferenceId;
+  String? _paymentMethod;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchAuditors();
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >=
-              _scrollController.position.maxScrollExtent - 200 &&
-          !isLoading &&
-          hasMore) {
-        _fetchAuditors();
-      }
-    });
-  }
+  Future<void> _launchMercadoPagoCheckout() async {
+    if (_selectedPlan == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Selecciona un plan")));
+      return;
+    }
 
-  Future<void> _fetchAuditors() async {
-    setState(() {
-      isLoading = true;
-    });
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    // Ajusta la URL y parámetros según tu API.
-    final response = await http.get(
-      Uri.parse('https://apifixya.onrender.com/auditors/all'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response.statusCode == 200) {
-      final List<dynamic> fetchedAuditors = json.decode(response.body);
-      setState(() {
-        page++;
-        isLoading = false;
-        if (fetchedAuditors.isEmpty) {
-          hasMore = false;
-        } else {
-          auditors.addAll(fetchedAuditors);
+    double price = _selectedPlan == "monthly" ? 4.0 : 45.0;
+    String title = _selectedPlan == "monthly" ? "Plan Mensual" : "Plan Anual";
+
+    final preferenceBody = jsonEncode({
+      "items": [
+        {
+          "title": title,
+          "quantity": 1,
+          "currency_id": "USD",
+          "unit_price": price,
         }
+      ],
+      "back_urls": {
+        "success": "cleanya://cleanersuccess",
+        "failure": "cleanya://cleanerfailure",
+        "pending": "cleanya://cleanerfailure",
+      },
+      "auto_return": "approved"
+    });
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    final response = await http.post(
+      Uri.parse("https://api.mercadopago.com/checkout/preferences?access_token=$mercadoPagoAccessToken"),
+      headers: {"Content-Type": "application/json"},
+      body: preferenceBody,
+    );
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final responseJson = jsonDecode(response.body);
+      setState(() {
+        _paymentMethod = "mercadopago";
+        _paymentReferenceId = responseJson['id'].toString();
+        _isProcessing = false;
       });
+
+      final initPoint = responseJson['init_point'];
+      final Uri checkoutUri = Uri.parse(initPoint);
+      if (await canLaunchUrl(checkoutUri)) {
+        await launchUrl(checkoutUri, mode: LaunchMode.externalApplication);
+        Navigator.pop(context, {
+          "paymentReferenceId": _paymentReferenceId,
+          "paymentMethod": _paymentMethod,
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No se pudo abrir el Checkout de Mercado Pago"))
+        );
+      }
     } else {
       setState(() {
-        isLoading = false;
+        _isProcessing = false;
       });
-      print("Error al obtener auditores: ${response.statusCode}");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Error al crear preferencia de Mercado Pago: ${response.statusCode}",
+            textAlign: TextAlign.center,
+          ),
+        )
+      );
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("Selecciona un auditor"),
-      content: Container(
-        width: double.maxFinite,
-        height: 400, // Altura fija para el diálogo
-        child: ListView.builder(
-          controller: _scrollController,
-          itemCount: auditors.length + (hasMore ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index < auditors.length) {
-              final auditor = auditors[index];
-              return ListTile(
-                title: Text(auditor['name'] ?? 'Sin nombre'),
-                subtitle: Text(auditor['email'] ?? ''),
-                onTap: () {
-                  Navigator.pop(context, auditor['auditor_id']);
-                },
-              );
-            } else {
-              // Indicador de carga al final de la lista
-              return const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-          },
+  Widget _buildPlanCard({
+    required String planKey,
+    required String title,
+    required String subtitle,
+    required double price,
+  }) {
+    final bool isSelected = _selectedPlan == planKey;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedPlan = planKey;
+        });
+      },
+      child: Card(
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            color: isSelected ? Colors.blueAccent : Colors.transparent,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: isSelected ? 8 : 4,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(subtitle, style: const TextStyle(fontSize: 16)),
+              const SizedBox(height: 12),
+              Text("\$$price",
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+            ],
+          ),
         ),
       ),
     );
   }
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Selecciona un plan"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildPlanCard(
+              planKey: "monthly",
+              title: "Plan Mensual",
+              subtitle: "Disfruta de nuestros servicios por solo \$4 al mes.",
+              price: 4.0,
+            ),
+            const SizedBox(height: 16),
+            _buildPlanCard(
+              planKey: "annual",
+              title: "Plan Anual",
+              subtitle: "Ahorra con nuestro plan anual por \$45 al año.",
+              price: 45.0,
+            ),
+            const SizedBox(height: 20),
+            _isProcessing
+                ? const CircularProgressIndicator()
+                : SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _launchMercadoPagoCheckout,
+                      child: const Text("Pagar con Mercado Pago"),
+                    ),
+                  ),
+            if (_paymentReferenceId != null)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text("Referencia: $_paymentReferenceId"),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -633,7 +694,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    // Clona la lista para trabajar localmente
     _notifications = List.from(widget.notifications);
   }
 

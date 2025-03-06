@@ -7,9 +7,15 @@ import 'login.dart';
 import 'register.dart';
 import 'Registercleaner.dart';
 import 'cleanershome.dart';
+import 'service_form.dart';
 import 'addService.dart';
 import 'users_notifications.dart'; // Pantalla de notificaciones
+import 'inicio.dart'; // Nuevo menú de inicio
+import 'payment_failure_screen.dart'; // Pantalla de pago fallido
+import 'package:app_links/app_links.dart';
+import 'deep_link_handler.dart'; // Widget para manejar deep links
 
+// Define un navigatorKey global para navegar desde cualquier parte de la app
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
@@ -30,22 +36,26 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'What Clean',
-      navigatorKey: navigatorKey, // Permite la navegación global
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
+    return DeepLinkHandler(
+      child: MaterialApp(
+        title: 'What Clean',
+        navigatorKey: navigatorKey, // Permite la navegación global
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+        ),
+        // Se inicia la app con la pantalla splash
+        home: const SplashScreen(),
+        routes: {
+          '/inicio': (context) => const Inicio(),
+          '/login': (context) => const LoginScreen(),
+          '/register': (context) => const RegisterScreen(),
+          '/registercleaner': (context) => const RegisterCleanerScreen(),
+          '/home': (context) => const HomeScreen(),
+          '/cleanershome': (context) => const CleanersHome(),
+          '/addService': (context) => const AddServiceScreen(),
+          '/paymentFailure': (context) => const PaymentFailureScreen(),
+        },
       ),
-      // Se inicia la app con la pantalla splash
-      home: const SplashScreen(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/registercleaner': (context) => const RegisterCleanerScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/cleanershome': (context) => const CleanersHome(),
-        '/addService': (context) => const AddServiceScreen(),
-      },
     );
   }
 }
@@ -70,7 +80,7 @@ class _SplashScreenState extends State<SplashScreen> {
     // Retardo opcional para mostrar el splash
     await Future.delayed(const Duration(seconds: 2));
     if (token != null) {
-      // Se determina si es usuario o cleaner según la existencia de claves en el SharedPreferences
+      // Se determina si es usuario o cleaner según la existencia de claves en SharedPreferences
       if (prefs.containsKey('userId')) {
         Navigator.pushReplacementNamed(context, '/home');
       } else if (prefs.containsKey('cleanerId')) {
@@ -79,7 +89,8 @@ class _SplashScreenState extends State<SplashScreen> {
         Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
-      Navigator.pushReplacementNamed(context, '/login');
+      // Si no hay token, se redirige al menú de inicio
+      Navigator.pushReplacementNamed(context, '/inicio');
     }
   }
   

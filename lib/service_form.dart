@@ -7,7 +7,9 @@ import 'location_selection_screen.dart';
 
 // Credenciales de Mercado Pago (Sandbox)
 const String mercadoPagoAccessToken = 'TEST-4550829005870809-022619-790e71ca5222fe1f9614e137d9ff2cc8-1155815200';
-
+//lQBq7UnV5tt6OO
+//CleanYa.ct.ws
+//if0_38447687
 
 /// Pantalla para llenar los datos iniciales del servicio.
 class ServiceFormScreen extends StatefulWidget {
@@ -370,15 +372,15 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
         {
           "title": widget.service['name'] ?? "Servicio",
           "quantity": 1,
-          "currency_id": "USD", // Ajusta la moneda según necesites
+          "currency_id": "MXN", // Ajusta la moneda según necesites
           "unit_price": widget.service['price'] != null
               ? double.tryParse(widget.service['price'].toString()) ?? 10.00
               : 10.00,
         }
       ],
       "back_urls": {
-        "success": "https://apifixya.onrender.com/mercadopago/success",
-        "failure": "https://apifixya.onrender.com/mercadopago/failure",
+        "success": "cleanya://serviceForm",
+        "failure": "cleanya://failure",
         "pending": "https://apifixya.onrender.com/mercadopago/pending",
       },
       "auto_return": "approved"

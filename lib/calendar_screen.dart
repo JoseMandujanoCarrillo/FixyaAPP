@@ -17,30 +17,39 @@ class _ProposalsPageState extends State<ProposalsPage>
     with SingleTickerProviderStateMixin {
   List<dynamic> proposals = [];
   bool isLoading = true;
-  late TabController _tabController;
+  late TabController _mainTabController;
 
-  // Lista de estados en el orden deseado: pendiente, aceptada, en progreso, rechazada, finalizada.
-  final List<String> statuses = [
+  // Pestañas principales: Pendiente, Aceptado y Rechazado.
+  final List<String> mainStatuses = [
     "pending",
     "accepted",
-    "in_progress",
     "rejected",
+  ];
+
+  final Map<String, String> mainStatusLabels = {
+    "pending": "Pendiente",
+    "accepted": "Aceptado",
+    "rejected": "Rechazado",
+  };
+
+  // Dentro de "Aceptado", tres subpestañas: Pendiente (in_progress), Aceptado (accepted) y Finalizado (finished).
+  final List<String> acceptedSubStatuses = [
+    "in_progress",
+    "accepted",
     "finished",
   ];
 
-  // Etiquetas para mostrar en las pestañas
-  final Map<String, String> statusLabels = {
-    "pending": "Pendiente",
-    "accepted": "Aceptada",
-    "in_progress": "En progreso",
-    "rejected": "Rechazada",
-    "finished": "Finalizada"
+  final Map<String, String> acceptedSubStatusLabels = {
+    "in_progress": "en progreso",
+    "accepted": "Aceptado",
+    "finished": "Finalizado",
   };
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: statuses.length, vsync: this);
+    _mainTabController =
+        TabController(length: mainStatuses.length, vsync: this);
     _fetchProposals();
   }
 
@@ -56,7 +65,7 @@ class _ProposalsPageState extends State<ProposalsPage>
       });
       return;
     }
-    // Se usa el endpoint con un size muy grande para obtener todas las propuestas
+    // Se usa un size muy grande para obtener todas las propuestas
     final Uri url =
         Uri.parse('https://apifixya.onrender.com/proposals/my?size=40000000000');
     try {
@@ -69,8 +78,6 @@ class _ProposalsPageState extends State<ProposalsPage>
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Si la API devuelve directamente una lista, se usa esa lista;
-        // de lo contrario, se busca en data['proposals'].
         List<dynamic> fetchedProposals =
             data is List ? data : (data['proposals'] ?? []);
         // Ordena las propuestas por fecha (descendente)
@@ -97,54 +104,108 @@ class _ProposalsPageState extends State<ProposalsPage>
     }
   }
 
-  // Función para confirmar la propuesta (llama al endpoint /confirm)
-  Future<void> _confirmProposal(int proposalId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null) return;
-
-    final url = Uri.parse(
-        'https://apifixya.onrender.com/proposals/$proposalId/confirm');
-
-    try {
-      final response = await http.put(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("Servicio confirmado")));
-        _fetchProposals();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Error al confirmar el servicio")));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Error de conexión")));
-    }
-  }
-
-  // Función para formatear la fecha
-  String formatDateTime(String dateTimeString) {
-    DateTime dateTime = DateTime.parse(dateTimeString).toLocal();
-    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
-  }
-
-  // Filtra las propuestas según el estado recibido
-  List<dynamic> _filterProposalsByStatus(String status) {
+  // Filtra según pestaña principal:
+  // - "pending": propuestas con status "pending"
+  // - "rejected": propuestas con status "rejected"
+  // - "accepted": aquellas con status "accepted", "in_progress" o "finished"
+  List<dynamic> _filterProposalsByMainStatus(String status) {
     return proposals.where((proposal) {
-      final currentStatus = (proposal['status'] ?? '').toString().trim();
-      return currentStatus == status;
+      String proposalStatus = (proposal['status'] ?? '').toString().trim();
+      if (status == "pending") {
+        return proposalStatus == "pending";
+      } else if (status == "rejected") {
+        return proposalStatus == "rejected";
+      } else if (status == "accepted") {
+        return proposalStatus == "accepted" ||
+            proposalStatus == "in_progress" ||
+            proposalStatus == "finished";
+      }
+      return false;
     }).toList();
   }
 
-  // Construye el widget para cada propuesta
+  // Vista para pestañas "Pendiente" y "Rechazado"
+  Widget _buildTabView(String status) {
+    List<dynamic> filteredProposals = _filterProposalsByMainStatus(status);
+    if (filteredProposals.isEmpty) {
+      return Center(
+        child: Text(
+            "No hay propuestas ${mainStatusLabels[status]?.toLowerCase()}"),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _fetchProposals,
+      child: ListView.builder(
+        itemCount: filteredProposals.length,
+        itemBuilder: (context, index) {
+          return _buildProposalItem(filteredProposals[index]);
+        },
+      ),
+    );
+  }
+
+  // Vista para la pestaña "Aceptado", con subpestañas: Pendiente (in_progress), Aceptado y Finalizado.
+  Widget _buildAcceptedTabView() {
+    // Filtra todas las propuestas pertenecientes a "accepted"
+    List<dynamic> acceptedProposals = _filterProposalsByMainStatus("accepted");
+    return DefaultTabController(
+      length: acceptedSubStatuses.length,
+      child: Column(
+        children: [
+          Container(
+            color: Colors.white, // fondo blanco
+            child: TabBar(
+              labelColor: Colors.blue, // texto azul cuando está seleccionado
+              unselectedLabelColor: Colors.black, // texto negro cuando no está seleccionado
+              indicatorColor: Colors.blue, // indicador en azul
+              tabs: acceptedSubStatuses
+                  .map((s) => Tab(text: acceptedSubStatusLabels[s]))
+                  .toList(),
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: acceptedSubStatuses.map((subStatus) {
+                // Para subpestaña "pending": mostrar solo propuestas con estado "in_progress"
+                // Para subpestaña "accepted": mostrar solo propuestas con estado "accepted"
+                // Para subpestaña "finished": mostrar solo propuestas con estado "finished"
+                List<dynamic> filtered = acceptedProposals.where((proposal) {
+                  String proposalStatus =
+                      (proposal['status'] ?? '').toString().trim();
+                  if (subStatus == "pending") {
+                    return proposalStatus == "in_progress";
+                  } else if (subStatus == "accepted") {
+                    return proposalStatus == "accepted";
+                  } else if (subStatus == "finished") {
+                    return proposalStatus == "finished";
+                  }
+                  return false;
+                }).toList();
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Text("No hay propuestas ${acceptedSubStatusLabels[subStatus]?.toLowerCase()}"),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: _fetchProposals,
+                  child: ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      return _buildProposalItem(filtered[index]);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Construye cada card de propuesta con el color de fondo solicitado.
   Widget _buildProposalItem(dynamic proposal) {
-    // Se asigna un color según el estado
+    Color cardColor = const Color(0xFFC5E7F2);
     Color statusColor;
     switch (proposal['status']) {
       case 'pending':
@@ -165,12 +226,10 @@ class _ProposalsPageState extends State<ProposalsPage>
       default:
         statusColor = Colors.black;
     }
-
-    // Se actualiza la referencia a la propiedad según el modelo (cleaner_started)
+    // Mostrar botón "Confirmar" si es "accepted" y el cleaner ya inició.
     bool showConfirm = proposal['status'] == 'accepted' &&
         (proposal['cleaner_started'] ?? false) == true;
-
-    // Si "cleaner_finished" es true y el estado aún no es "finished", se muestra el botón para finalizar
+    // Mostrar botón "Subir y finalizar" si el cleaner terminó y aún no se ha finalizado.
     bool showFinish = (proposal['cleaner_finished'] ?? false) == true &&
         proposal['status'] != 'finished';
 
@@ -179,7 +238,7 @@ class _ProposalsPageState extends State<ProposalsPage>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardColor,
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
             BoxShadow(
@@ -201,7 +260,7 @@ class _ProposalsPageState extends State<ProposalsPage>
             ),
             const SizedBox(height: 4),
             Text(
-              'Estado: ${statusLabels[proposal['status']] ?? proposal['status']}',
+              'Estado: ${proposal['status']}',
               style: TextStyle(
                 fontSize: 14,
                 color: statusColor,
@@ -250,23 +309,39 @@ class _ProposalsPageState extends State<ProposalsPage>
     );
   }
 
-  // Construye la vista para cada pestaña según el estado
-  Widget _buildTabView(String status) {
-    List<dynamic> filteredProposals = _filterProposalsByStatus(status);
-    if (filteredProposals.isEmpty) {
-      return Center(
-        child: Text("No hay propuestas ${statusLabels[status]?.toLowerCase()}"),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: _fetchProposals,
-      child: ListView.builder(
-        itemCount: filteredProposals.length,
-        itemBuilder: (context, index) {
-          return _buildProposalItem(filteredProposals[index]);
+  String formatDateTime(String dateTimeString) {
+    DateTime dateTime = DateTime.parse(dateTimeString).toLocal();
+    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
+  }
+
+  Future<void> _confirmProposal(int proposalId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+
+    final url = Uri.parse(
+        'https://apifixya.onrender.com/proposals/$proposalId/confirm');
+
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
         },
-      ),
-    );
+      );
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Servicio confirmado")));
+        _fetchProposals();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Error al confirmar el servicio")));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Error de conexión")));
+    }
   }
 
   @override
@@ -275,18 +350,21 @@ class _ProposalsPageState extends State<ProposalsPage>
       appBar: AppBar(
         title: const Text("Historial de servicio"),
         bottom: TabBar(
-          controller: _tabController,
-          tabs: statuses
-              .map((status) => Tab(text: statusLabels[status]))
+          controller: _mainTabController,
+          tabs: mainStatuses
+              .map((status) => Tab(text: mainStatusLabels[status]))
               .toList(),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-              controller: _tabController,
-              children:
-                  statuses.map((status) => _buildTabView(status)).toList(),
+              controller: _mainTabController,
+              children: [
+                _buildTabView("pending"),
+                _buildAcceptedTabView(),
+                _buildTabView("rejected"),
+              ],
             ),
     );
   }
@@ -304,12 +382,9 @@ class FinishProposalPage extends StatefulWidget {
 class _FinishProposalPageState extends State<FinishProposalPage> {
   bool isSubmitting = false;
   bool isUploadingImage = false;
-  // Lista para almacenar de 1 a 3 URLs de imágenes
   List<String> _uploadedImageUrls = [];
-
   final ImagePicker _picker = ImagePicker();
 
-  /// Función para subir la imagen a Imgur y obtener la URL resultante.
   Future<String?> _uploadImage(File imageFile) async {
     final uri = Uri.parse('https://api.imgur.com/3/upload');
     final request = http.MultipartRequest('POST', uri);
@@ -328,7 +403,6 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
     return null;
   }
 
-  /// Permite seleccionar y subir una imagen, acumulando la URL en la lista.
   Future<void> _pickAndUploadImage() async {
     if (_uploadedImageUrls.length >= 3) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -336,7 +410,6 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       );
       return;
     }
-
     final ImageSource? source = await showDialog<ImageSource>(
       context: context,
       builder: (context) => AlertDialog(
@@ -353,9 +426,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
         ],
       ),
     );
-
-    if (source == null) return; // Cancelado.
-
+    if (source == null) return;
     final pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
       setState(() {
@@ -378,11 +449,11 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
     }
   }
 
-  /// Envía la propuesta finalizada usando la lista de URLs.
   Future<void> _uploadAndFinishProposal() async {
     if (_uploadedImageUrls.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Por favor, selecciona y sube al menos una imagen")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text("Por favor, selecciona y sube al menos una imagen")));
       return;
     }
     setState(() {
@@ -396,8 +467,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       });
       return;
     }
-
-    // Primer endpoint: subir la imagen "después"
+    // Primer endpoint: subir las imágenes "después"
     final uploadUrl = Uri.parse(
         'https://apifixya.onrender.com/proposals/${widget.proposal['id']}/upload-imagen-despues');
     final uploadBody = jsonEncode({
@@ -430,8 +500,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       });
       return;
     }
-
-    // Segundo endpoint: actualizar la propuesta para finalizar (cambiando status a finished)
+    // Segundo endpoint: actualizar la propuesta a "finished"
     final finishUrl = Uri.parse(
         'https://apifixya.onrender.com/proposals/${widget.proposal['id']}');
     final finishBody = jsonEncode({
@@ -498,7 +567,6 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
                   child: const Text("No hay imágenes seleccionadas"),
                 ),
               const SizedBox(height: 16),
-              // Botón para agregar imágenes (si hay menos de 3)
               if (_uploadedImageUrls.length < 3)
                 ElevatedButton(
                   onPressed: isUploadingImage ? null : _pickAndUploadImage,
