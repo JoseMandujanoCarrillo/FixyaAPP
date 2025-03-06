@@ -50,7 +50,7 @@ class _DeepLinkHandlerState extends State<DeepLinkHandler> {
     if (uri.scheme == 'cleanya') {
       if (uri.host == 'serviceForm') {
         // Si el pago fue exitoso, redirige a ServiceFormScreen.
-        // Aquí se pueden extraer parámetros desde el URI si fuera necesario.
+        // Aquí se extraen los parámetros desde el URI si fuera necesario.
         final Map<String, dynamic> defaultService = {
           'id': 1,
           'name': 'Servicio de limpieza',
