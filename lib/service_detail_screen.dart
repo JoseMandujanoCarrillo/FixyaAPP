@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'service_form.dart';
 
 class ServiceDetailScreen extends StatefulWidget {
   final Map<String, dynamic> service;
 
-  const ServiceDetailScreen({super.key, required this.service});
+  const ServiceDetailScreen({Key? key, required this.service}) : super(key: key);
 
   @override
   _ServiceDetailScreenState createState() => _ServiceDetailScreenState();
 }
 
 class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
-  bool isExpanded = false;
+  Map<String, dynamic>? cleaner; // Datos del cleaner asociado
 
   @override
   void initState() {
     super.initState();
-    // Después de que se haya renderizado la pantalla, se verifica el horario.
+    _fetchCleaner();
+    // Verifica el horario después de renderizar la pantalla.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.service['schedule'] != null &&
           widget.service['schedule'] is Map) {
@@ -25,7 +28,6 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         final String allowedStartStr = schedule['startTime'] ?? "00:00";
         final String allowedEndStr = schedule['endTime'] ?? "23:59";
 
-        // Se asume formato "HH:mm"
         final allowedStartParts = allowedStartStr.split(":");
         final allowedEndParts = allowedEndStr.split(":");
         final TimeOfDay allowedStartTime = TimeOfDay(
@@ -44,7 +46,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         final allowedEndMinutes =
             allowedEndTime.hour * 60 + allowedEndTime.minute;
 
-        // Mapeo para obtener el nombre del día en español
+        // Mapeo para obtener el nombre del día en español.
         final weekDays = {
           1: "Lunes",
           2: "Martes",
@@ -56,7 +58,6 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         };
         final currentDayName = weekDays[now.weekday] ?? "";
 
-        // Si el día actual no está permitido o la hora no se encuentra en el rango permitido:
         if (!allowedDays.contains(currentDayName) ||
             currentMinutes < allowedStartMinutes ||
             currentMinutes > allowedEndMinutes) {
@@ -73,143 +74,25 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-              Row(
-                children: [
-                  const Icon(Icons.cleaning_services,
-                      size: 30, color: Color.fromARGB(255, 0, 184, 255)),
-                  const SizedBox(width: 10),
-                  Text(
-                    "WC",
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 148, 214, 255),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Servicio a solicitar',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15)),
-                elevation: 5,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          widget.service['imageUrl'] ?? '',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.service['name'] ?? 'Limpieza',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              widget.service['description'] ??
-                                  'Descripción del servicio',
-                              style: const TextStyle(
-                                  fontSize: 14, color: Colors.grey),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 5),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: const [],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              ..._buildDetailSection("Realización del servicio", "12/09/2024"),
-              ..._buildDetailSection(
-                  "Hora",
-                  widget.service['schedule'] != null &&
-                          widget.service['schedule'] is Map
-                      ? "${widget.service['schedule']['startTime']} - ${widget.service['schedule']['endTime']}"
-                      : '8:00am - 6:00pm'),
-              ..._buildDetailSection("Precio Total",
-                  '${widget.service['price'] ?? 'Null MXM'}'),
-              ..._buildDetailSection("Descripción",
-                  '${widget.service['description'] ?? 'Descripción del servicio'}'),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 30, vertical: 15),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('CANCELAR',
-                        style: TextStyle(color: Colors.black)),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ServiceFormScreen(service: widget.service),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color.fromARGB(255, 0, 184, 255),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 30, vertical: 15),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('CONFIRMAR',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  /// Consulta la ruta pública del cleaner para obtener su nombre y foto.
+  Future<void> _fetchCleaner() async {
+    final cleanerId = widget.service['cleanerId'];
+    if (cleanerId == null) return;
+    final url = 'https://apifixya.onrender.com/cleaners/$cleanerId/public';
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          cleaner = data;
+        });
+      }
+    } catch (e) {
+      // Manejo de errores según sea necesario.
+    }
   }
 
+  /// Sección genérica para mostrar un título y su valor.
   List<Widget> _buildDetailSection(String title, String value) {
     return [
       Text(
@@ -223,5 +106,183 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       ),
       const SizedBox(height: 15),
     ];
+  }
+
+  /// Sección que muestra los datos del cleaner.
+  Widget _buildCleanerSection() {
+    if (cleaner == null) {
+      return const SizedBox();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Limpieza a cargo de:',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: 5,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundImage: (cleaner!['imageurl'] != null &&
+                          cleaner!['imageurl'] != '')
+                      ? NetworkImage(cleaner!['imageurl'])
+                      : const AssetImage('assets/default_cleaner.png')
+                          as ImageProvider,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    cleaner!['name'] ?? 'Sin nombre',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Extraer los días de trabajo desde el schedule.
+    String daysWorked = 'No especificado';
+    if (widget.service['schedule'] != null &&
+        widget.service['schedule'] is Map &&
+        widget.service['schedule']['days'] != null) {
+      final List<dynamic> days = widget.service['schedule']['days'];
+      daysWorked = days.join(", ");
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.service['name'] ?? 'Detalle del Servicio'),
+        backgroundColor: const Color.fromARGB(255, 0, 184, 255),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Imagen del servicio como banner (se muestra solo una vez).
+            if (widget.service['imageUrl'] != null &&
+                widget.service['imageUrl'] != '')
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(15),
+                  bottomRight: Radius.circular(15),
+                ),
+                child: Image.network(
+                  widget.service['imageUrl'],
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Image.network(
+                      'https://i.imgur.com/HbMMBc9.jpeg',
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    );
+                  },
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Título del servicio.
+                  Text(
+                    widget.service['name'] ?? 'Servicio',
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  // Secciones de detalle.
+                  ..._buildDetailSection("Días de trabajo", daysWorked),
+                  ..._buildDetailSection(
+                    "Horario de servicio",
+                    widget.service['schedule'] != null &&
+                            widget.service['schedule'] is Map
+                        ? "${widget.service['schedule']['startTime']} - ${widget.service['schedule']['endTime']}"
+                        : '8:00am - 6:00pm',
+                  ),
+                  ..._buildDetailSection(
+                      "Precio Total", '${widget.service['price'] ?? 'Null MXM'}'),
+                  const SizedBox(height: 20),
+                  // Sección del cleaner.
+                  _buildCleanerSection(),
+                  // Sección de descripción (fuera de una Card).
+                  const Text(
+                    'Descripción',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.service['description'] ??
+                        'Descripción del servicio',
+                    style:
+                        const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 20),
+                  // Botones de acción.
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 30, vertical: 15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('CANCELAR',
+                            style: TextStyle(color: Colors.black)),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ServiceFormScreen(service: widget.service),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color.fromARGB(255, 0, 184, 255),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 30, vertical: 15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('CONFIRMAR',
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

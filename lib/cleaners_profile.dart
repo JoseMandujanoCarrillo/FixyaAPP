@@ -15,13 +15,11 @@ class CleanersProfile extends StatefulWidget {
 }
 
 class _CleanersProfileState extends State<CleanersProfile> {
-  int? userId; // Se guardará el id del cleaner obtenido desde /cleaners/me
+  int? userId; // Se guarda el id obtenido desde /cleaners/me (aunque ya no se usa para actualizar)
   String userName = "Cargando...";
   String userEmail = "Cargando...";
   String userImageUrl = "";
-
   bool isLoading = true;
-
   final ImagePicker _picker = ImagePicker(); // Para seleccionar imagen
 
   @override
@@ -34,13 +32,11 @@ class _CleanersProfileState extends State<CleanersProfile> {
   Future<void> _getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
-
     if (token == null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Usuario no logueado')));
       return;
     }
-
     try {
       final response = await http.get(
         Uri.parse('https://apifixya.onrender.com/cleaners/me'),
@@ -49,14 +45,13 @@ class _CleanersProfileState extends State<CleanersProfile> {
           'accept': '*/*',
         },
       );
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
           userId = data['id'];
           userName = data['name'] ?? 'Usuario';
           userEmail = data['email'] ?? 'Sin correo';
-          userImageUrl = data['image_url'] ?? "";
+          userImageUrl = data['imageurl'] ?? "";
           isLoading = false;
         });
       } else {
@@ -78,26 +73,18 @@ class _CleanersProfileState extends State<CleanersProfile> {
 
   /// Envía a la API únicamente el campo que se actualizó.
   Future<void> _updateUserFieldOnApi(String field, String newValue) async {
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo obtener el id del cleaner')));
-      return;
-    }
-
+    // Ya no se requiere userId para la actualización ya que se usa /cleaners/me
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
-
     if (token == null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Usuario no logueado')));
       return;
     }
-
     final payload = { field: newValue };
-
     try {
       final response = await http.put(
-        Uri.parse('https://apifixya.onrender.com/cleaners/$userId'),
+        Uri.parse('https://apifixya.onrender.com/cleaners/me'),
         headers: {
           'Content-Type': 'application/json',
           'accept': '*/*',
@@ -105,7 +92,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
         },
         body: json.encode(payload),
       );
-
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cleaner actualizado')),
@@ -132,7 +118,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
         ),
       ),
     );
-
     if (updatedValue != null) {
       String fieldToUpdate = "";
       setState(() {
@@ -142,7 +127,6 @@ class _CleanersProfileState extends State<CleanersProfile> {
         } else if (label == 'Correo Electrónico') {
           userEmail = updatedValue;
           fieldToUpdate = "email";
-        } else if (label == 'Latitud') {
         }
       });
       // Actualiza en la API solo el campo modificado.
@@ -152,18 +136,15 @@ class _CleanersProfileState extends State<CleanersProfile> {
 
   /// Método para seleccionar y subir la imagen de perfil a Imgur (solo usando la galería).
   Future<void> _pickAndUploadFinalImage() async {
-    // Se usa solo la galería (sin opción para cámara)
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile == null) return; // Se canceló la selección
-
     final File imageFile = File(pickedFile.path);
-    // Sube la imagen a Imgur.
     final String? uploadedUrl = await _uploadImage(imageFile);
     if (uploadedUrl != null) {
       setState(() {
         userImageUrl = uploadedUrl;
       });
-      await _updateUserFieldOnApi("image_url", uploadedUrl);
+      await _updateUserFieldOnApi("imageurl", uploadedUrl);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Imagen actualizada exitosamente")),
       );
@@ -216,105 +197,103 @@ class _CleanersProfileState extends State<CleanersProfile> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('userId');
-    // Redirige a la pantalla de login. Asegúrate de tener definida la ruta '/login'
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Extendemos el cuerpo detrás del AppBar para resaltar el header
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Perfil del Cleaner', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
+                // Header con el color primario
                 Container(
-                  color: const Color.fromARGB(255, 148, 214, 255),
-                  height: 150,
+                  height: 200,
+                  decoration: const BoxDecoration(
+                    color: Color.fromARGB(255, 148, 214, 255),
+                  ),
                 ),
+                // Contenido principal en un Card central
                 SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 60),
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 120, left: 16, right: 16, bottom: 16),
+                    child: Card(
+                      elevation: 10,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Padding(
                         padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Avatar con botón para editar la imagen usando Imgur
+                            // Avatar con botón para editar la imagen
                             Stack(
+                              alignment: Alignment.center,
                               children: [
                                 CircleAvatar(
                                   radius: 50,
+                                  backgroundColor: Colors.grey.shade200,
                                   backgroundImage: userImageUrl.isNotEmpty
                                       ? NetworkImage(userImageUrl)
-                                      : const NetworkImage(
-                                          'https://via.placeholder.com/150'),
+                                      : const NetworkImage('https://via.placeholder.com/150'),
                                 ),
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Colors.white, size: 20),
-                                    onPressed: _pickAndUploadFinalImage,
+                                  child: CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: const Color.fromARGB(255, 0, 184, 255),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.white, size: 16),
+                                      onPressed: _pickAndUploadFinalImage,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 10),
-                            // Se muestran los demás campos editables
-                            _buildEditableRow('Nombre', userName),
-                            _buildEditableRow('Correo Electrónico', userEmail),
-                            const SizedBox(height: 10),
-                            // Botón para métodos de pago:
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PaymentMethodsScreen(),
-                                  ),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color.fromARGB(255, 0, 184, 255),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: const Text('Método de Pago',
-                                  style: TextStyle(color: Colors.white)),
+                            // Muestra la URL de la imagen (opcional)
+                            Text(
+                              'URL de la imagen:',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                              textAlign: TextAlign.center,
+                            ),
+                            Text(
+                              userImageUrl,
+                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                              textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 10),
-                            // Botón para cerrar sesión:
+                            // Campos editables: Nombre y Correo Electrónico
+                            _buildEditableRow('Nombre', userName),
+                            const Divider(),
+                            _buildEditableRow('Correo Electrónico', userEmail),
+                            const SizedBox(height: 20),
+                            // Botón de Cerrar sesión
                             ElevatedButton(
                               onPressed: _logout,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color.fromARGB(255, 0, 184, 255),
+                                backgroundColor: const Color.fromARGB(255, 0, 184, 255),
+                                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                              child: const Text('Cerrar sesión',
-                                  style: TextStyle(color: Colors.white)),
+                              child: const Text('Cerrar sesión', style: TextStyle(color: Colors.white)),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -385,8 +364,7 @@ class _EditFieldScreenState extends State<EditFieldScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text('Guardar',
-                  style: TextStyle(color: Colors.white)),
+              child: const Text('Guardar', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),

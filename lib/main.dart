@@ -26,6 +26,9 @@ Future<void> main() async {
     DeviceOrientation.portraitUp,
   ]);
 
+  // Ocultar la barra de navegación y la barra de estado en modo inmersivo
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
   // Inicializa el servicio de notificaciones locales con el navigatorKey
   await LocalNotificationService().init(navigatorKey);
 

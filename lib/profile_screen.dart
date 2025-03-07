@@ -90,7 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final payload = { field: newValue };
+    final payload = {field: newValue};
 
     try {
       final response = await http.put(
@@ -122,7 +122,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _pickAndUploadProfileImage() async {
     // Se utiliza solo la galería
     final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedFile =
+        await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile == null) return; // Si se cancela, no hacer nada.
 
     File imageFile = File(pickedFile.path);
@@ -146,7 +147,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<String?> _uploadImage(File imageFile) async {
     final uri = Uri.parse('https://api.imgur.com/3/upload');
     final request = http.MultipartRequest('POST', uri);
-    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+    request.files
+        .add(await http.MultipartFile.fromPath('image', imageFile.path));
     // Reemplaza con tu Client-ID real de Imgur
     request.headers['Authorization'] = 'Client-ID 32794ee601322f0';
     final response = await request.send();
@@ -220,39 +222,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Se extiende el cuerpo detrás del AppBar para que el header se vea completo
+      extendBodyBehindAppBar: false,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        // Opcional: se puede agregar un icono o título
+        title: const Text('Perfil', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
+                // Fondo de la cabecera
                 Container(
-                  color: const Color.fromARGB(255, 148, 214, 255),
-                  height: 150,
+                  height: 200,
+                  decoration: const BoxDecoration(
+                    color: Color.fromARGB(255, 148, 214, 255),
+                  ),
                 ),
+                // Contenido principal en un Card que sobresale
                 SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 60),
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.only(top: 100, left: 16, right: 16, bottom: 16),
+                    child: Card(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15)),
+                      elevation: 10,
+                      child: Padding(
                         padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Avatar con botón para editar la imagen usando Imgur
+                            // Avatar y botón de edición de imagen
                             Stack(
                               children: [
                                 CircleAvatar(
                                   radius: 50,
+                                  backgroundColor: Colors.grey.shade200,
                                   backgroundImage: userImageUrl.isNotEmpty
                                       ? NetworkImage(userImageUrl)
                                       : const NetworkImage(
@@ -261,50 +269,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Colors.white, size: 20),
-                                    // Al presionar se selecciona una imagen de la galería y se sube a Imgur.
-                                    onPressed: _pickAndUploadProfileImage,
+                                  child: CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor:
+                                        const Color.fromARGB(255, 0, 184, 255),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.edit,
+                                          color: Colors.white, size: 16),
+                                      onPressed: _pickAndUploadProfileImage,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            // Se muestran los campos editables
+                            const SizedBox(height: 15),
+                            // Información editable: Nombre y correo
                             _buildEditableRow('Nombre', userName),
+                            const Divider(),
                             _buildEditableRow('Correo Electrónico', userEmail),
-                            const SizedBox(height: 10),
-                            // Botón para métodos de pago:
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PaymentMethodsScreen(),
-                                  ),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color.fromARGB(255, 0, 184, 255),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: const Text('Método de Pago',
-                                  style: TextStyle(color: Colors.white)),
-                            ),
-                            const SizedBox(height: 10),
-                            // Botón para cerrar sesión:
+                            const SizedBox(height: 20),
+                            // Botón de Cerrar sesión
                             ElevatedButton(
                               onPressed: _logout,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
                                     const Color.fromARGB(255, 0, 184, 255),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 30, vertical: 15),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                                    borderRadius: BorderRadius.circular(10)),
                               ),
                               child: const Text('Cerrar sesión',
                                   style: TextStyle(color: Colors.white)),
@@ -312,7 +305,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
