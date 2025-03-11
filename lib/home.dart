@@ -13,6 +13,7 @@ import 'profile_screen.dart';
 import 'search_screen.dart';
 import 'service_detail_screen.dart';
 import 'users_notifications.dart';
+import 'Userchat.dart';
 
 // Instancia global del plugin de notificaciones
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -21,7 +22,7 @@ int _notificationCounter = 0; // Contador para IDs de notificación
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-  
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -130,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return const ProposalsPage();
       case 2:
-        return const Center(child: Text('Menú'));
+        return const ChatListPage();
       case 3:
         return const ProfileScreen();
       default:
@@ -207,8 +208,8 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 8),
         child: Card(
           color: const Color(0xFFC5E7F2), // Color modificado de la card
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print("No hay token disponible");
       return;
     }
-  
+
     final url = Uri.parse('https://apifixya.onrender.com/proposals/my');
     final response = await http.get(
       url,
@@ -332,25 +333,24 @@ class _HomeScreenState extends State<HomeScreen> {
         'Authorization': 'Bearer $token',
       },
     );
-  
+
     if (response.statusCode == 401) {
       await _handleUnauthorized();
       return;
     }
-  
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final proposals = data['proposals'] as List<dynamic>;
       for (final proposal in proposals) {
         final int proposalId = proposal['id'];
         final String status = proposal['status'];
-  
+
         if (status != 'pending') {
           if (_notifiedProposalStatuses[proposalId] != status) {
             print("Nuevo estado en propuesta $proposalId: $status");
             await showStatusNotification(
-              "La propuesta de ${proposal['tipodeservicio'] ?? 'servicio'} ha sido: $status"
-            );
+                "La propuesta de ${proposal['tipodeservicio'] ?? 'servicio'} ha sido: $status");
             _notifiedProposalStatuses[proposalId] = status;
             await _saveNotifiedStatuses();
           }
@@ -377,7 +377,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Color.fromARGB(255, 0, 184, 255), // Color modificado de la barra superior
+        backgroundColor: Color.fromARGB(
+            255, 0, 184, 255), // Color modificado de la barra superior
         elevation: 0,
         actions: [
           IconButton(
@@ -417,7 +418,7 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(
               icon: Icon(Icons.calendar_today), label: 'Historial'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Menú'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'chat'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),

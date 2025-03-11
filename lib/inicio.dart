@@ -95,7 +95,7 @@ class Inicio extends StatelessWidget {
                   top: -150,
                   right: -60,
                   child: Image.asset(
-                    '../../assets/iconos/icono2.png',
+                    '/assets/iconos/icono2.png',
                     width: 300,
                   ),
                 ),
@@ -103,7 +103,7 @@ class Inicio extends StatelessWidget {
                   bottom: 100,
                   left: 100,
                   child: Image.asset(
-                    '../../assets/iconos/icono1.png',
+                    'assets/iconos/icono1.png',
                     width: 300,
                   ),
                 ),

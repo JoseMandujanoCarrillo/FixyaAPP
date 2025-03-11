@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'ChatlistCleaner.dart';
 import 'cleaners_profile.dart';
 import 'proposalsCleaners.dart';
 import 'select_auditor.dart';
@@ -57,8 +57,8 @@ class _CleanersHomeState extends State<CleanersHome> {
     _loadData();
 
     // Inicia el timer para chequear propuestas cada 30 segundos
-    _proposalsTimer =
-        Timer.periodic(const Duration(seconds: 30), (_) => _checkForNewProposals());
+    _proposalsTimer = Timer.periodic(
+        const Duration(seconds: 30), (_) => _checkForNewProposals());
   }
 
   @override
@@ -72,7 +72,8 @@ class _CleanersHomeState extends State<CleanersHome> {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings();
-    const InitializationSettings initializationSettings = InitializationSettings(
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
     );
@@ -178,7 +179,8 @@ class _CleanersHomeState extends State<CleanersHome> {
               notifications.add({
                 'id': proposalId,
                 'title': 'Nueva propuesta',
-                'body': 'Tienes una nueva propuesta: ${proposal['description'] ?? ''}',
+                'body':
+                    'Tienes una nueva propuesta: ${proposal['description'] ?? ''}',
                 'timestamp': DateTime.now().toIso8601String(),
               });
             });
@@ -279,7 +281,8 @@ class _CleanersHomeState extends State<CleanersHome> {
           auditorId = selectedAuditorId;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Auditor seleccionado. Verificación pendiente.")),
+          const SnackBar(
+              content: Text("Auditor seleccionado. Verificación pendiente.")),
         );
       } else {
         print("Error en la solicitud de verificación: ${response.statusCode}");
@@ -343,13 +346,15 @@ class _CleanersHomeState extends State<CleanersHome> {
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 8),
         child: Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
                 child: imageUrl != null && imageUrl.isNotEmpty
                     ? Image.network(
                         imageUrl,
@@ -378,7 +383,8 @@ class _CleanersHomeState extends State<CleanersHome> {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -386,7 +392,9 @@ class _CleanersHomeState extends State<CleanersHome> {
                     Text(
                       priceText,
                       style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -410,7 +418,7 @@ class _CleanersHomeState extends State<CleanersHome> {
       case 1:
         return const ProposalsCleaners();
       case 2:
-        return const Center(child: Text('Menú'));
+        return const ChatCleanerListPage();
       case 3:
         return const CleanersProfile();
       default:
@@ -472,8 +480,9 @@ class _CleanersHomeState extends State<CleanersHome> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Propuestas'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'Menú'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today), label: 'Propuestas'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Menú'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
@@ -545,7 +554,8 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
     });
 
     final response = await http.post(
-      Uri.parse("https://api.mercadopago.com/checkout/preferences?access_token=$mercadoPagoAccessToken"),
+      Uri.parse(
+          "https://api.mercadopago.com/checkout/preferences?access_token=$mercadoPagoAccessToken"),
       headers: {"Content-Type": "application/json"},
       body: preferenceBody,
     );
@@ -567,22 +577,19 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
           "paymentMethod": _paymentMethod,
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("No se pudo abrir el Checkout de Mercado Pago"))
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("No se pudo abrir el Checkout de Mercado Pago")));
       }
     } else {
       setState(() {
         _isProcessing = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Error al crear preferencia de Mercado Pago: ${response.statusCode}",
-            textAlign: TextAlign.center,
-          ),
-        )
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          "Error al crear preferencia de Mercado Pago: ${response.statusCode}",
+          textAlign: TextAlign.center,
+        ),
+      ));
     }
   }
 
@@ -614,13 +621,16 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(subtitle, style: const TextStyle(fontSize: 16)),
               const SizedBox(height: 12),
               Text("\$$price",
                   style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green)),
             ],
           ),
         ),

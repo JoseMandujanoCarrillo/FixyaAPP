@@ -262,6 +262,36 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
       _uploadedImageUrls = List<String>.from(widget.proposal['imagen_antes']);
     }
   }
+  
+  // Función para enviar el mensaje al usuario
+  Future<void> _sendMessageToUser(int proposalId, String message) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+    final url = Uri.parse('https://apifixya.onrender.com/proposals/$proposalId/send-message');
+    final body = json.encode({"message": message});
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      );
+      if (response.statusCode == 200) {
+        // Mensaje enviado correctamente.
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al enviar el mensaje")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error de conexión")),
+      );
+    }
+  }
 
   Future<String?> _uploadImage(File imageFile) async {
     final uri = Uri.parse('https://api.imgur.com/3/upload');
@@ -424,7 +454,31 @@ class _ProposalDetailScreenState extends State<ProposalDetailScreen> {
             icon: const Icon(Icons.check),
             label: const Text("Aceptar"),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            onPressed: () {
+            onPressed: () async {
+              final messageController = TextEditingController(text: "propuesta aceptada");
+              final result = await showDialog<String>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Enviar mensaje al usuario"),
+                  content: TextField(
+                    controller: messageController,
+                    decoration: const InputDecoration(labelText: "Mensaje"),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancelar"),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, messageController.text),
+                      child: const Text("Enviar"),
+                    ),
+                  ],
+                ),
+              );
+              if (result != null && result.isNotEmpty) {
+                await _sendMessageToUser(widget.proposal['id'], result);
+              }
               widget.onStatusChange(widget.proposal['id'], "accepted");
               Navigator.pop(context);
             },
