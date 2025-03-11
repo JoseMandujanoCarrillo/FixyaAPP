@@ -59,7 +59,8 @@ class _ChatCleanerListPageState extends State<ChatCleanerListPage> {
     });
 
     // Se agrega el parámetro "limit" para controlar el número de chats por página
-    final url = 'https://apifixya.onrender.com/chats/cleaner/chats?page=$currentPage&limit=$pageSize';
+    final url =
+        'https://apifixya.onrender.com/chats/cleaner/chats?page=$currentPage&limit=$pageSize';
     final response = await http.get(
       Uri.parse(url),
       headers: {
@@ -91,6 +92,17 @@ class _ChatCleanerListPageState extends State<ChatCleanerListPage> {
     setState(() {
       isLoading = false;
     });
+  }
+
+  // Permitir refrescar la lista manualmente
+  Future<void> _refreshChats() async {
+    setState(() {
+      messages.clear();
+      currentPage = 1;
+      hasMore = true;
+      user = null;
+    });
+    await fetchChatPage();
   }
 
   @override
@@ -127,7 +139,9 @@ class _ChatCleanerListPageState extends State<ChatCleanerListPage> {
             MaterialPageRoute(
               builder: (context) => ChatDetailPage(
                 chatId: message['id'], // Se usa el id del chat
-                cleanerName: chatUser != null ? chatUser['name'] ?? 'Sin nombre' : '',
+                cleanerName: chatUser != null
+                    ? chatUser['name'] ?? 'Sin nombre'
+                    : '',
                 cleanerImage: chatUser != null ? chatUser['imageUrl'] ?? '' : '',
                 token: token!, // Pasamos el token obtenido
               ),
@@ -144,39 +158,42 @@ class _ChatCleanerListPageState extends State<ChatCleanerListPage> {
       appBar: AppBar(
         title: const Text('Chats del Cleaner'),
       ),
-      body: Column(
-        children: [
-          // Información del usuario (por ejemplo, el cleaner o el usuario con quien se conversa)
-          if (user != null)
-            ListTile(
-              leading: user!['imageUrl'] != null
-                  ? CircleAvatar(
-                      backgroundImage: NetworkImage(user!['imageUrl']),
-                    )
-                  : const CircleAvatar(child: Icon(Icons.person)),
-              title: Text(user!['name'] ?? ''),
+      body: RefreshIndicator(
+        onRefresh: _refreshChats,
+        child: Column(
+          children: [
+            // Información del usuario (por ejemplo, el cleaner o el usuario con quien se conversa)
+            if (user != null)
+              ListTile(
+                leading: user!['imageUrl'] != null
+                    ? CircleAvatar(
+                        backgroundImage: NetworkImage(user!['imageUrl']),
+                      )
+                    : const CircleAvatar(child: Icon(Icons.person)),
+                title: Text(user!['name'] ?? ''),
+              ),
+            const Divider(),
+            // Lista infinita de chats
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                itemCount: messages.length + (isLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index < messages.length) {
+                    var message = messages[index];
+                    return _buildMessageItem(message);
+                  } else {
+                    // Indicador de carga al final de la lista
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                },
+              ),
             ),
-          const Divider(),
-          // Lista infinita de chats
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              itemCount: messages.length + (isLoading ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index < messages.length) {
-                  var message = messages[index];
-                  return _buildMessageItem(message);
-                } else {
-                  // Indicador de carga al final de la lista
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
