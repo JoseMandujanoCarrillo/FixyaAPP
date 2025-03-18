@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'calendar_screen.dart';
 import 'profile_screen.dart';
 import 'search_screen.dart';
@@ -21,7 +22,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 int _notificationCounter = 0; // Contador para IDs de notificación
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -41,11 +42,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Comprobamos si el usuario está logueado; si no, redirige a /login.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkLogin();
+    // Verificar conectividad y redirigir al login si no hay internet
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      bool isConnected = await _checkInternetConnectivity();
+      if (!isConnected) {
+        Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        _checkLogin();
+        _loadData();
+      }
     });
-    _loadData();
     _loadNotifiedStatuses();
     startCheckingNotifications();
   }
@@ -56,6 +62,12 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // Verifica si hay conexión a Internet
+  Future<bool> _checkInternetConnectivity() async {
+    var connectivityResult = await Connectivity().checkConnectivity();
+    return connectivityResult != ConnectivityResult.none;
+  }
+
   Future<void> _checkLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -64,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Función auxiliar para manejar token expirado
+  // Función auxiliar para manejar token expirado o errores de usuario
   Future<void> _handleUnauthorized() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
@@ -81,10 +93,14 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // Modificación: Redirige al login si ocurre algún error o los datos del usuario son inválidos
   Future<void> _getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
-    if (token == null) return;
+    if (token == null) {
+      await _handleUnauthorized();
+      return;
+    }
     try {
       final response = await http.get(
         Uri.parse('https://apifixya.onrender.com/users/me'),
@@ -96,13 +112,62 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        // Verifica que los datos del usuario sean válidos
+        if (data == null || data['name'] == null) {
+          await _handleUnauthorized();
+          return;
+        }
         setState(() {
-          userName = data['name'] ?? 'Usuario';
+          userName = data['name'];
         });
+      } else {
+        await _handleUnauthorized();
       }
-    } catch (_) {}
+    } catch (e) {
+      // Si ocurre cualquier error al obtener los datos, redirige al login
+      await _handleUnauthorized();
+    }
   }
 
+  // Método para obtener las calificaciones y calcular el promedio por servicio
+  Future<Map<int, double>> _getRatings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return {};
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://apifixya.onrender.com/ratings'),
+        headers: {
+          'accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final ratingsList = List<dynamic>.from(data['ratings']);
+        // Agrupar las calificaciones por serviceId
+        Map<int, List<double>> ratingsGrouped = {};
+        for (var item in ratingsList) {
+          final int serviceId = item['serviceId'];
+          final double ratingValue = (item['rating'] as num).toDouble();
+          ratingsGrouped.putIfAbsent(serviceId, () => []).add(ratingValue);
+        }
+        // Calcular el promedio de calificación para cada servicio
+        Map<int, double> averageRatings = {};
+        ratingsGrouped.forEach((serviceId, ratings) {
+          final avg = ratings.reduce((a, b) => a + b) / ratings.length;
+          averageRatings[serviceId] = avg;
+        });
+        return averageRatings;
+      }
+    } catch (e) {
+      print("Error fetching ratings: $e");
+    }
+    return {};
+  }
+
+  // Modificar _getServices para ordenar los servicios "Populares" por calificación
   Future<void> _getServices() async {
     try {
       final response = await http.get(
@@ -111,12 +176,28 @@ class _HomeScreenState extends State<HomeScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final allServices = List<dynamic>.from(data['data']);
+        final half = allServices.length ~/ 2;
+        final cleanFastServices = allServices.sublist(0, half);
+        var popularServices = allServices.sublist(half);
+        
+        // Obtener el mapa de calificaciones (serviceId -> promedio)
+        Map<int, double> ratingsMap = await _getRatings();
+        
+        // Ordenar los servicios populares de mayor a menor según la calificación
+        popularServices.sort((a, b) {
+          final double ratingA = ratingsMap[a['id']] ?? 0;
+          final double ratingB = ratingsMap[b['id']] ?? 0;
+          return ratingB.compareTo(ratingA);
+        });
+
         setState(() {
-          services1 = allServices.sublist(0, allServices.length ~/ 2);
-          services2 = allServices.sublist(allServices.length ~/ 2);
+          services1 = cleanFastServices;
+          services2 = popularServices;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      print("Error fetching services: $e");
+    }
   }
 
   void _onItemTapped(int index) {
@@ -125,22 +206,38 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Define _buildPageContent solo una vez
+  // Define _buildPageContent solo una vez y envuélvelo en AnimatedSwitcher para transiciones suaves
   Widget _buildPageContent() {
+    Widget page;
     switch (_selectedIndex) {
       case 1:
-        return const ProposalsPage();
+        page = const ProposalsPage();
+        break;
       case 2:
-        return const ChatListPage();
+        page = const ChatListPage();
+        break;
       case 3:
-        return const ProfileScreen();
+        page = const ProfileScreen();
+        break;
       default:
-        return _buildHomeContent();
+        page = _buildHomeContent();
     }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: page,
+    );
   }
 
   Widget _buildHomeContent() {
+    // Filtrar los servicios para la sección Clean Fast
+    final cleanFastServices = services1
+        .where((service) => service['isCleanFast'] == true)
+        .toList();
+
     return SingleChildScrollView(
+      key: const ValueKey('homeContent'),
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
             "Clean Fast",
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          _buildHorizontalList(services1),
+          _buildHorizontalList(cleanFastServices),
           const SizedBox(height: 20),
           const Text(
             "Populares",
@@ -194,80 +291,102 @@ class _HomeScreenState extends State<HomeScreen> {
       priceText = service['price']?.toString() ?? 'Precio no disponible';
     }
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ServiceDetailScreen(service: service),
-          ),
-        );
+    // Animación de aparición y efecto de pulsación usando TweenAnimationBuilder e InkWell
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.8, end: 1.0),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOut,
+      builder: (context, scale, child) {
+        return Transform.scale(scale: scale, child: child);
       },
-      child: Container(
-        width: 200,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        child: Card(
-          color: const Color(0xFFC5E7F2), // Color modificado de la card
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 4,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                child: imageUrl != null && imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) =>
-                            const Center(child: CircularProgressIndicator()),
-                        errorWidget: (context, url, error) =>
-                            const Icon(Icons.broken_image, size: 120),
-                      )
-                    : imageBytea != null && imageBytea.isNotEmpty
-                        ? Image.memory(
-                            Uint8List.fromList(hex.decode(imageBytea)),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ServiceDetailScreen(service: service),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 200,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          child: Card(
+            color: const Color(0xFFC5E7F2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  // Se añade Hero para animar la transición de la imagen
+                  child: Hero(
+                    tag: 'serviceImage_${service["id"]}',
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: imageUrl,
                             height: 120,
                             width: double.infinity,
                             fit: BoxFit.cover,
+                            placeholder: (context, url) =>
+                                const Center(child: CircularProgressIndicator()),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.broken_image, size: 120),
                           )
-                        : const Icon(Icons.image, size: 120),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      priceText,
-                      style: const TextStyle(
+                        : imageBytea != null && imageBytea.isNotEmpty
+                            ? Image.memory(
+                                Uint8List.fromList(hex.decode(imageBytea)),
+                                height: 120,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              )
+                            : const Icon(Icons.image, size: 120),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        priceText,
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -377,8 +496,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Color.fromARGB(
-            255, 0, 184, 255), // Color modificado de la barra superior
+        automaticallyImplyLeading: false, // Se quita la flecha de retroceso
+        backgroundColor:
+            const Color.fromARGB(255, 0, 184, 255), // Color modificado de la barra superior
         elevation: 0,
         actions: [
           IconButton(
@@ -418,7 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(
               icon: Icon(Icons.calendar_today), label: 'Historial'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'chat'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),

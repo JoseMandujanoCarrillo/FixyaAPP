@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 
+/// Página principal que muestra las propuestas con barra de selección tipo filtro
 class ProposalsPage extends StatefulWidget {
   const ProposalsPage({Key? key}) : super(key: key);
 
@@ -18,48 +19,49 @@ class _ProposalsPageState extends State<ProposalsPage>
     with SingleTickerProviderStateMixin {
   List<dynamic> proposals = [];
   bool isLoading = true;
-  late TabController _mainTabController;
-  Timer? _pollingTimer;
+  late TabController _tabController;
+  Timer? _pollingTimer; // Actualización visible cada 30 segundos
+  Timer? _hiddenPollingTimer; // Temporizador oculto cada 3 segundos
 
-  // Pestañas principales
-  final List<String> mainStatuses = [
+  // Estados y sus etiquetas
+  final List<String> statuses = [
+    "in_progress",
     "pending",
     "accepted",
     "rejected",
-  ];
-  final Map<String, String> mainStatusLabels = {
-    "pending": "Pendiente",
-    "accepted": "Aceptado",
-    "rejected": "Rechazado",
-  };
-
-  // Subpestañas para "Aceptado"
-  final List<String> acceptedSubStatuses = [
-    "in_progress",
-    "accepted",
     "finished",
   ];
-  final Map<String, String> acceptedSubStatusLabels = {
-    "in_progress": "en progreso",
-    "accepted": "Aceptado",
-    "finished": "Finalizado",
+  final Map<String, String> statusLabels = {
+    "in_progress": "En proceso",
+    "pending": "Pendiente",
+    "accepted": "Aceptada",
+    "rejected": "Rechazada",
+    "finished": "Finalizada",
   };
 
   @override
   void initState() {
     super.initState();
-    _mainTabController =
-        TabController(length: mainStatuses.length, vsync: this);
+    _tabController = TabController(length: statuses.length, vsync: this);
+    // Listener para reconstruir la vista cuando se cambia de pestaña
+    _tabController.addListener(() {
+      setState(() {});
+    });
     _fetchProposals();
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _fetchProposals();
+    });
+    // Temporizador oculto que consulta cada 3 segundos usando el mismo endpoint
+    _hiddenPollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _checkProposalsCount();
     });
   }
 
   @override
   void dispose() {
-    _mainTabController.dispose();
+    _tabController.dispose();
     _pollingTimer?.cancel();
+    _hiddenPollingTimer?.cancel();
     super.dispose();
   }
 
@@ -102,90 +104,63 @@ class _ProposalsPageState extends State<ProposalsPage>
     }
   }
 
-  List<dynamic> _filterProposalsByMainStatus(String status) {
+  // Función que consulta el mismo endpoint para comparar la cantidad de propuestas
+  Future<void> _checkProposalsCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+    final Uri url = Uri.parse(
+        'https://apifixya.onrender.com/proposals/my?size=40000000000');
+    try {
+      final response = await http.get(url, headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        List<dynamic> fetchedProposals =
+            data is List ? data : (data['proposals'] ?? []);
+        // Si el número de propuestas es diferente, se actualiza el listado visible
+        if (fetchedProposals.length != proposals.length) {
+          _fetchProposals();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error en _checkProposalsCount: $e');
+    }
+  }
+
+  // Filtra las propuestas según el estado exacto
+  List<dynamic> _filterProposalsByStatus(String status) {
     return proposals.where((proposal) {
       final String proposalStatus =
           (proposal['status'] ?? '').toString().trim();
-      if (status == "pending") {
-        return proposalStatus == "pending";
-      } else if (status == "rejected") {
-        return proposalStatus == "rejected";
-      } else if (status == "accepted") {
-        return ["accepted", "in_progress", "finished"].contains(proposalStatus);
-      }
-      return false;
+      return proposalStatus == status;
     }).toList();
   }
 
-  Widget _buildTabView(String status) {
-    final filteredProposals = _filterProposalsByMainStatus(status);
+  Widget _buildTabViewForStatus(String status) {
+    final filteredProposals = _filterProposalsByStatus(status);
     if (filteredProposals.isEmpty) {
       return Center(
         child: Text(
-          "No hay propuestas ${mainStatusLabels[status]?.toLowerCase()}",
+          "No hay propuestas ${statusLabels[status]?.toLowerCase()}",
         ),
       );
     }
     return RefreshIndicator(
       onRefresh: _fetchProposals,
-      child: ListView.builder(
-        itemCount: filteredProposals.length,
-        itemBuilder: (context, index) => ProposalCard(
-          proposal: filteredProposals[index],
-          onConfirm: _confirmProposal,
-          onRefresh: _fetchProposals,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 500),
+        child: ListView.builder(
+          key: ValueKey(filteredProposals.length),
+          itemCount: filteredProposals.length,
+          itemBuilder: (context, index) => ProposalCard(
+            proposal: filteredProposals[index],
+            onConfirm: _confirmProposal,
+            onRefresh: _fetchProposals,
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAcceptedTabView() {
-    final acceptedProposals = _filterProposalsByMainStatus("accepted");
-    return DefaultTabController(
-      length: acceptedSubStatuses.length,
-      child: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            child: TabBar(
-              labelColor: Colors.blue,
-              unselectedLabelColor: Colors.black,
-              indicatorColor: Colors.blue,
-              tabs: acceptedSubStatuses
-                  .map((s) => Tab(text: acceptedSubStatusLabels[s]))
-                  .toList(),
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: acceptedSubStatuses.map((subStatus) {
-                final filtered = acceptedProposals.where((proposal) {
-                  final String proposalStatus =
-                      (proposal['status'] ?? '').toString().trim();
-                  return proposalStatus == subStatus;
-                }).toList();
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Text(
-                      "No hay propuestas ${acceptedSubStatusLabels[subStatus]?.toLowerCase()}",
-                    ),
-                  );
-                }
-                return RefreshIndicator(
-                  onRefresh: _fetchProposals,
-                  child: ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) => ProposalCard(
-                      proposal: filtered[index],
-                      onConfirm: _confirmProposal,
-                      onRefresh: _fetchProposals,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -206,16 +181,16 @@ class _ProposalsPageState extends State<ProposalsPage>
         },
       );
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Servicio confirmado")));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Servicio confirmado")));
         _fetchProposals();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Error al confirmar el servicio")));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error de conexión")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Error de conexión")));
     }
   }
 
@@ -225,27 +200,48 @@ class _ProposalsPageState extends State<ProposalsPage>
       appBar: AppBar(
         title: const Text("Historial de servicio"),
         bottom: TabBar(
-          controller: _mainTabController,
-          tabs: mainStatuses
-              .map((status) => Tab(text: mainStatusLabels[status]))
-              .toList(),
+          controller: _tabController,
+          isScrollable: true,
+          // Deshabilitamos el indicador por defecto
+          indicator: const BoxDecoration(),
+          tabs: List.generate(statuses.length, (index) {
+            final bool isSelected = _tabController.index == index;
+            return Tab(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.blue : Colors.white,
+                  border: isSelected
+                      ? null
+                      : Border.all(color: Colors.black),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  statusLabels[statuses[index]]!,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.black,
+                  ),
+                ),
+              ),
+            );
+          }),
         ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-              controller: _mainTabController,
-              children: [
-                _buildTabView("pending"),
-                _buildAcceptedTabView(),
-                _buildTabView("rejected"),
-              ],
+              controller: _tabController,
+              children: statuses
+                  .map((status) => _buildTabViewForStatus(status))
+                  .toList(),
             ),
     );
   }
 }
 
-class ProposalCard extends StatelessWidget {
+/// Tarjeta animada para cada propuesta
+class ProposalCard extends StatefulWidget {
   final dynamic proposal;
   final Future<void> Function(int) onConfirm;
   final Future<void> Function() onRefresh;
@@ -256,6 +252,40 @@ class ProposalCard extends StatelessWidget {
     required this.onConfirm,
     required this.onRefresh,
   }) : super(key: key);
+
+  @override
+  _ProposalCardState createState() => _ProposalCardState();
+}
+
+class _ProposalCardState extends State<ProposalCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _opacityAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -281,72 +311,107 @@ class ProposalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cardColor = Color(0xFFC5E7F2);
-    final String status = (proposal['status'] ?? '').toString().trim();
+    final String status =
+        (widget.proposal['status'] ?? '').toString().trim();
     final Color statusColor = _getStatusColor(status);
-    final bool showConfirm =
-        status == 'accepted' && (proposal['cleanerStarted'] ?? false) == true;
-    final bool showFinish = (proposal['cleaner_finished'] ?? false) == true &&
+    // Mostrar botón de confirmación solo si el estado es "accepted" y se inició el servicio
+    final bool showConfirm = status == 'accepted' &&
+        (widget.proposal['cleanerStarted'] ?? false) == true;
+    // Mostrar botón para finalizar solo si se terminó de limpiar y el estado no es "finished"
+    final bool showFinish = (widget.proposal['cleaner_finished'] ?? false) ==
+            true &&
         status != 'finished';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Card(
-        color: cardColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 4,
+    return SlideTransition(
+      position: _offsetAnimation,
+      child: FadeTransition(
+        opacity: _opacityAnimation,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                proposal['tipodeservicio'] ?? '',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Estado: $status',
-                style: TextStyle(fontSize: 14, color: statusColor),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Creado: ${_formatDateTime(proposal['createdAt'])}',
-                style: const TextStyle(fontSize: 14, color: Colors.black54),
-              ),
-              if (showConfirm)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      await onConfirm(proposal['id']);
-                    },
-                    child: const Text("Confirmar"),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Card(
+            color: const Color(0xFFC5E7F2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.proposal['tipodeservicio'] ?? '',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              if (showFinish)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              FinishProposalPage(proposal: proposal),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        'Estado: ',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        status,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                      if (result == true) {
-                        onRefresh();
-                      }
-                    },
-                    child: const Text("Subir y finalizar"),
+                      ),
+                    ],
                   ),
-                ),
-            ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Creado: ${_formatDateTime(widget.proposal['createdAt'])}',
+                    style: const TextStyle(fontSize: 14, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 8),
+                  if (showConfirm)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () async {
+                          await widget.onConfirm(widget.proposal['id']);
+                        },
+                        child: const Text("Confirmar"),
+                      ),
+                    ),
+                  if (showFinish)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Hero(
+                        tag: "finish_${widget.proposal['id']}",
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    FinishProposalPage(proposal: widget.proposal),
+                              ),
+                            );
+                            if (result == true) {
+                              widget.onRefresh();
+                            }
+                          },
+                          child: const Text("Subir y finalizar"),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -354,6 +419,7 @@ class ProposalCard extends StatelessWidget {
   }
 }
 
+/// Pantalla para finalizar el servicio con subida de imágenes y calificación
 class FinishProposalPage extends StatefulWidget {
   final dynamic proposal;
   const FinishProposalPage({Key? key, required this.proposal}) : super(key: key);
@@ -368,11 +434,14 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
   final List<String> _uploadedImageUrls = [];
   final ImagePicker _picker = ImagePicker();
 
+  // Variables para la calificación
+  double _rating = 0;
+  final TextEditingController _commentController = TextEditingController();
+
   Future<String?> _uploadImage(File imageFile) async {
     final uri = Uri.parse('https://api.imgur.com/3/upload');
     final request = http.MultipartRequest('POST', uri);
-    request.files
-        .add(await http.MultipartFile.fromPath('image', imageFile.path));
+    request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
     request.headers['Authorization'] = 'Client-ID 32794ee601322f0';
     final response = await request.send();
     if (response.statusCode == 200) {
@@ -388,8 +457,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
   Future<void> _pickAndUploadImage() async {
     if (_uploadedImageUrls.length >= 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Solo puedes seleccionar hasta 3 imágenes")),
+        const SnackBar(content: Text("Solo puedes seleccionar hasta 3 imágenes")),
       );
       return;
     }
@@ -426,12 +494,55 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
     }
   }
 
+  // Función para enviar la calificación al endpoint
+  Future<void> _submitRating() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+
+    final ratingUrl = Uri.parse('https://apifixya.onrender.com/ratings/create');
+    final ratingBody = jsonEncode({
+      'serviceId': widget.proposal['serviceId'],
+      'rating': _rating.toInt(), // valor de 1 a 5
+      'comment': _commentController.text,
+    });
+
+    try {
+      final ratingResponse = await http.post(
+        ratingUrl,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: ratingBody,
+      );
+      if (ratingResponse.statusCode == 200 || ratingResponse.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Calificación enviada exitosamente")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al enviar la calificación")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error de conexión al enviar la calificación")),
+      );
+    }
+  }
+
   Future<void> _uploadAndFinishProposal() async {
     if (_uploadedImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text("Por favor, selecciona y sube al menos una imagen")),
+        const SnackBar(content: Text("Por favor, selecciona y sube al menos una imagen")),
+      );
+      return;
+    }
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Por favor, selecciona una calificación")),
       );
       return;
     }
@@ -442,17 +553,17 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       setState(() => isSubmitting = false);
       return;
     }
-    // Primer endpoint: subir imágenes
+    // Subir imágenes al endpoint
     final uploadUrl = Uri.parse(
         'https://apifixya.onrender.com/proposals/${widget.proposal['id']}/upload-imagen-despues');
-    final uploadBody =
-        jsonEncode({'imagen_despues': _uploadedImageUrls});
+    final uploadBody = jsonEncode({'imagen_despues': _uploadedImageUrls});
     try {
       final uploadResponse = await http.put(
         uploadUrl,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: uploadBody,
       );
@@ -465,14 +576,12 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text("Error de conexión al subir imágenes")),
+        const SnackBar(content: Text("Error de conexión al subir imágenes")),
       );
       setState(() => isSubmitting = false);
       return;
     }
-    // Segundo endpoint: actualizar el estado a "finished"
+    // Actualizar el estado a "finished"
     final finishUrl = Uri.parse(
         'https://apifixya.onrender.com/proposals/${widget.proposal['id']}');
     final finishBody = jsonEncode({'status': 'finished'});
@@ -482,6 +591,7 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: finishBody,
       );
@@ -489,44 +599,97 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Servicio finalizado")),
         );
+        // Enviar la calificación una vez finalizado el servicio
+        await _submitRating();
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Error al finalizar el servicio")),
+          const SnackBar(content: Text("Error al finalizar el servicio")),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text("Error de conexión al finalizar")),
+        const SnackBar(content: Text("Error de conexión al finalizar")),
       );
     } finally {
       setState(() => isSubmitting = false);
     }
   }
 
+  // Widget para mostrar las estrellas de calificación
+  Widget _buildRatingStars() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(5, (index) {
+        return IconButton(
+          icon: Icon(
+            index < _rating ? Icons.star : Icons.star_border,
+            color: Colors.amber,
+            size: 32,
+          ),
+          onPressed: () {
+            setState(() {
+              _rating = index + 1.0;
+            });
+          },
+        );
+      }),
+    );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Finalizar Servicio")),
+      appBar: AppBar(
+        title: const Text("Finalizar y Calificar Servicio"),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Título con animación Hero para transición fluida
+              Hero(
+                tag: "finish_${widget.proposal['id']}",
+                child: Material(
+                  color: Colors.transparent,
+                  child: Text(
+                    widget.proposal['tipodeservicio'] ?? '',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Sección de imágenes subidas
               _uploadedImageUrls.isNotEmpty
                   ? Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: _uploadedImageUrls
-                          .map((url) => Image.network(
-                                url,
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
+                          .map((url) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blueAccent),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    url,
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
                               ))
                           .toList(),
                     )
@@ -537,20 +700,54 @@ class _FinishProposalPageState extends State<FinishProposalPage> {
                     ),
               const SizedBox(height: 16),
               if (_uploadedImageUrls.length < 3)
-                ElevatedButton(
-                  onPressed:
-                      isUploadingImage ? null : _pickAndUploadImage,
-                  child: isUploadingImage
-                      ? const CircularProgressIndicator()
-                      : const Text("Agregar imagen"),
+                ElevatedButton.icon(
+                  icon: isUploadingImage
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_a_photo),
+                  label: const Text("Agregar imagen"),
+                  onPressed: isUploadingImage ? null : _pickAndUploadImage,
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed:
-                    isSubmitting ? null : _uploadAndFinishProposal,
-                child: isSubmitting
-                    ? const CircularProgressIndicator()
-                    : const Text("Subir y finalizar"),
+              const Divider(),
+              const SizedBox(height: 16),
+              // Sección para calificar el servicio
+              const Text(
+                "Califica el servicio",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              _buildRatingStars(),
+              TextField(
+                controller: _commentController,
+                decoration: const InputDecoration(
+                  labelText: "Comentario",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.upload),
+                label: const Text("Subir y finalizar"),
+                onPressed: isSubmitting ? null : _uploadAndFinishProposal,
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
               )
             ],
           ),

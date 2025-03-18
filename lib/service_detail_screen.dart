@@ -14,15 +14,16 @@ class ServiceDetailScreen extends StatefulWidget {
 
 class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   Map<String, dynamic>? cleaner; // Datos del cleaner asociado
+  Map<String, dynamic>? ratingData; // Datos de calificaciones y comentarios
 
   @override
   void initState() {
     super.initState();
     _fetchCleaner();
+    _fetchRatings();
     // Verifica el horario después de renderizar la pantalla.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.service['schedule'] != null &&
-          widget.service['schedule'] is Map) {
+      if (widget.service['schedule'] != null && widget.service['schedule'] is Map) {
         final schedule = widget.service['schedule'];
         final List<dynamic> allowedDays = schedule['days'] ?? [];
         final String allowedStartStr = schedule['startTime'] ?? "00:00";
@@ -41,10 +42,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 
         final now = DateTime.now();
         final currentMinutes = now.hour * 60 + now.minute;
-        final allowedStartMinutes =
-            allowedStartTime.hour * 60 + allowedStartTime.minute;
-        final allowedEndMinutes =
-            allowedEndTime.hour * 60 + allowedEndTime.minute;
+        final allowedStartMinutes = allowedStartTime.hour * 60 + allowedStartTime.minute;
+        final allowedEndMinutes = allowedEndTime.hour * 60 + allowedEndTime.minute;
 
         // Mapeo para obtener el nombre del día en español.
         final weekDays = {
@@ -92,6 +91,109 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     }
   }
 
+  /// Consulta la calificación y comentarios del servicio.
+  Future<void> _fetchRatings() async {
+    final serviceId = widget.service['id'];
+    if (serviceId == null) return;
+    final url = 'https://apifixya.onrender.com/ratings/service/$serviceId/ratings';
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          ratingData = data;
+        });
+      }
+    } catch (e) {
+      // Manejo de errores según sea necesario.
+    }
+  }
+
+  /// Construye los íconos de estrellas según la calificación promedio.
+  Widget _buildRatingStars(double rating) {
+    int fullStars = rating.floor();
+    bool hasHalf = (rating - fullStars) >= 0.5;
+    int emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
+    List<Widget> stars = [];
+    for (int i = 0; i < fullStars; i++) {
+      stars.add(const Icon(Icons.star, color: Colors.amber, size: 20));
+    }
+    if (hasHalf) {
+      stars.add(const Icon(Icons.star_half, color: Colors.amber, size: 20));
+    }
+    for (int i = 0; i < emptyStars; i++) {
+      stars.add(const Icon(Icons.star_border, color: Colors.amber, size: 20));
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: stars);
+  }
+
+  /// Sección que muestra las calificaciones y comentarios.
+  Widget _buildRatingsSection() {
+    if (ratingData == null) return const SizedBox();
+
+    double averageRating = ratingData!['averageRating'] != null
+        ? (ratingData!['averageRating'] as num).toDouble()
+        : 0.0;
+    int ratingsCount = ratingData!['ratingsCount'] ?? 0;
+    List<dynamic> comments = ratingData!['comments'] ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Calificaciones y Comentarios',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: 5,
+          child: Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _buildRatingStars(averageRating),
+                    const SizedBox(width: 10),
+                    Text(
+                      '$averageRating ($ratingsCount valoraciones)',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                if (comments.isNotEmpty) ...[
+                  const Text(
+                    'Comentarios:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: comments
+                        .map(
+                          (comment) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Text(
+                              comment.toString(),
+                              style: const TextStyle(fontSize: 14, color: Colors.grey),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  )
+                ]
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
   /// Sección genérica para mostrar un título y su valor.
   List<Widget> _buildDetailSection(String title, String value) {
     return [
@@ -110,9 +212,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 
   /// Sección que muestra los datos del cleaner.
   Widget _buildCleanerSection() {
-    if (cleaner == null) {
-      return const SizedBox();
-    }
+    if (cleaner == null) return const SizedBox();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -122,8 +222,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         ),
         const SizedBox(height: 10),
         Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           elevation: 5,
           child: Padding(
             padding: const EdgeInsets.all(10),
@@ -131,20 +230,15 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               children: [
                 CircleAvatar(
                   radius: 40,
-                  backgroundImage: (cleaner!['imageurl'] != null &&
-                          cleaner!['imageurl'] != '')
+                  backgroundImage: (cleaner!['imageurl'] != null && cleaner!['imageurl'] != '')
                       ? NetworkImage(cleaner!['imageurl'])
-                      : const AssetImage('assets/default_cleaner.png')
-                          as ImageProvider,
+                      : const AssetImage('assets/default_cleaner.png') as ImageProvider,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     cleaner!['name'] ?? 'Sin nombre',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -176,9 +270,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Imagen del servicio como banner (se muestra solo una vez).
-            if (widget.service['imageUrl'] != null &&
-                widget.service['imageUrl'] != '')
+            // Imagen del servicio como banner.
+            if (widget.service['imageUrl'] != null && widget.service['imageUrl'] != '')
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(15),
@@ -207,37 +300,44 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   // Título del servicio.
                   Text(
                     widget.service['name'] ?? 'Servicio',
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
                   // Secciones de detalle.
                   ..._buildDetailSection("Días de trabajo", daysWorked),
                   ..._buildDetailSection(
                     "Horario de servicio",
-                    widget.service['schedule'] != null &&
-                            widget.service['schedule'] is Map
+                    widget.service['schedule'] != null && widget.service['schedule'] is Map
                         ? "${widget.service['schedule']['startTime']} - ${widget.service['schedule']['endTime']}"
                         : '8:00am - 6:00pm',
                   ),
-                  ..._buildDetailSection(
-                      "Precio Total", '${widget.service['price'] ?? 'Null MXM'}'),
+                  ..._buildDetailSection("Precio Total", '${widget.service['price'] ?? 'Null MXM'}'),
                   const SizedBox(height: 20),
                   // Sección del cleaner.
                   _buildCleanerSection(),
-                  // Sección de descripción (fuera de una Card).
+                  // Sección de calificaciones y comentarios.
+                  _buildRatingsSection(),
+                  // Sección de descripción.
                   const Text(
                     'Descripción',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    widget.service['description'] ??
-                        'Descripción del servicio',
-                    style:
-                        const TextStyle(fontSize: 16, color: Colors.grey),
+                    widget.service['description'] ?? 'Descripción del servicio',
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
                   ),
+                  const SizedBox(height: 20),
+                  // Mostrar mensaje en rojo si es CleanFast
+                  if (widget.service['isCleanFast'] == true)
+                    Text(
+                      "El servicio es CleanFast",
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   // Botones de acción.
                   Row(
@@ -246,34 +346,26 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                       OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 30, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text('CANCELAR',
-                            style: TextStyle(color: Colors.black)),
+                        child: const Text('CANCELAR', style: TextStyle(color: Colors.black)),
                       ),
                       ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  ServiceFormScreen(service: widget.service),
+                              builder: (context) => ServiceFormScreen(service: widget.service),
                             ),
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color.fromARGB(255, 0, 184, 255),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 30, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                          backgroundColor: const Color.fromARGB(255, 0, 184, 255),
+                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text('CONFIRMAR',
-                            style: TextStyle(color: Colors.white)),
+                        child: const Text('CONFIRMAR', style: TextStyle(color: Colors.white)),
                       ),
                     ],
                   ),

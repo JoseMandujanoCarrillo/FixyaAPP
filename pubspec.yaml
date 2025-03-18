@@ -52,12 +52,18 @@ dependencies:
   url_launcher: ^6.1.7
   flutter_custom_tabs: ^2.1.0
   app_links: ^6.4.0
+  flutter_rating_bar: ^4.0.0
+  shimmer: ^2.0.0
+  connectivity_plus: ^3.0.2
+
 
   
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.1
+
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -68,7 +74,10 @@ dev_dependencies:
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
-
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/cleaningICO.png"
 # The following section is specific to Flutter packages.
 flutter:
 
@@ -84,6 +93,7 @@ flutter:
     - assets/cleaning.png
     - assets/iconos/icono2.png
     - assets/iconos/icono1.png
+    - assets/cleaningICO.png
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

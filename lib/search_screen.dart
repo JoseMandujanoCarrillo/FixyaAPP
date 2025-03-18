@@ -1,9 +1,9 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:convert/convert.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'service_detail_screen.dart'; // Importar la pantalla de detalles
-import 'package:convert/convert.dart';
-import 'dart:typed_data'; // Para Uint8List
+import 'service_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -12,7 +12,8 @@ class SearchScreen extends StatefulWidget {
   _SearchScreenState createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen>
+    with TickerProviderStateMixin {
   final TextEditingController searchController = TextEditingController();
   List<dynamic> allServices = [];
   List<dynamic> filteredServices = [];
@@ -21,35 +22,46 @@ class _SearchScreenState extends State<SearchScreen> {
   final int _pageSize = 10;
   bool _hasMore = true;
 
+  late final AnimationController _fadeController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 400),
+  );
+
   @override
   void initState() {
     super.initState();
     _loadServices();
-    searchController.addListener(_onSearchChanged); // Escuchar cambios en el campo de búsqueda
+    searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    searchController.removeListener(_onSearchChanged); // Dejar de escuchar cambios
+    searchController.removeListener(_onSearchChanged);
     searchController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
-  // Cargar servicios
+  // Cargar servicios (paginación)
   Future<void> _loadServices() async {
     try {
       final response = await http.get(
-        Uri.parse('https://apifixya.onrender.com/services?page=$_page&size=$_pageSize'),
+        Uri.parse(
+            'https://apifixya.onrender.com/services?page=$_page&size=$_pageSize'),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
           allServices.addAll(data['data']);
-          filteredServices = List.from(allServices); // Inicialmente, mostrar todos los servicios
+          // Si la búsqueda está vacía, mostramos todos
+          filteredServices = searchController.text.isEmpty
+              ? List.from(allServices)
+              : _filterServicesByQuery(searchController.text);
           _isLoading = false;
           _hasMore = data['data'].length == _pageSize;
         });
+        _fadeController.forward(from: 0.0);
       } else {
         throw Exception('Error al cargar los servicios: ${response.body}');
       }
@@ -57,47 +69,47 @@ class _SearchScreenState extends State<SearchScreen> {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   // Filtrar servicios según el texto de búsqueda
+  List<dynamic> _filterServicesByQuery(String query) {
+    final q = query.toLowerCase();
+    return allServices.where((service) {
+      final name = (service['name'] ?? '').toLowerCase();
+      final description = (service['description'] ?? '').toLowerCase();
+      return name.contains(q) || description.contains(q);
+    }).toList();
+  }
+
   void _onSearchChanged() {
-    final query = searchController.text.toLowerCase();
+    final query = searchController.text;
     setState(() {
-      if (query.isEmpty) {
-        // Si no hay texto de búsqueda, mostrar todos los servicios
-        filteredServices = List.from(allServices);
-      } else {
-        // Filtrar servicios por nombre o descripción
-        filteredServices = allServices
-            .where((service) =>
-                (service['name']?.toLowerCase().contains(query) ?? false) ||
-                (service['description']?.toLowerCase().contains(query) ?? false))
-            .toList();
-      }
+      filteredServices = query.isEmpty
+          ? List.from(allServices)
+          : _filterServicesByQuery(query);
     });
   }
 
-  // Cargar más servicios para el scroll infinito
+  // Cargar más servicios para scroll infinito o si la búsqueda no tuvo resultados
   Future<void> _loadMoreServices() async {
     if (!_hasMore) return;
-
     setState(() {
       _page++;
     });
-
     await _loadServices();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Usamos el color primario del tema para la AppBar
+    final appBarColor = Theme.of(context).colorScheme.primary;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Buscar Servicios'),
-        backgroundColor: Color.fromARGB(255, 148, 214, 255),
+        backgroundColor: appBarColor,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -117,47 +129,62 @@ class _SearchScreenState extends State<SearchScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (value) {
-                // Llamar al filtrado cada vez que el texto cambie
-                _onSearchChanged();
-              },
+              onChanged: (value) => _onSearchChanged(),
             ),
           ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filteredServices.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No se encontraron servicios',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      )
-                    : NotificationListener<ScrollNotification>(
-                        onNotification: (ScrollNotification scrollInfo) {
-                          if (scrollInfo.metrics.pixels ==
-                                  scrollInfo.metrics.maxScrollExtent &&
-                              _hasMore) {
-                            _loadMoreServices();
-                          }
-                          return true;
-                        },
-                        child: ListView.builder(
-                          itemCount: filteredServices.length + (_hasMore ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == filteredServices.length) {
-                              return const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child: CircularProgressIndicator(),
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    child: filteredServices.isEmpty
+                        ? Column(
+                            key: const ValueKey('empty'),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'No se encontraron servicios',
+                                style:
+                                    TextStyle(fontSize: 16, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 16),
+                              if (_hasMore)
+                                ElevatedButton(
+                                  onPressed: _loadMoreServices,
+                                  child: const Text('Cargar más'),
                                 ),
-                              );
-                            }
-                            final service = filteredServices[index];
-                            return _buildServiceCard(service);
-                          },
-                        ),
-                      ),
+                            ],
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            key: const ValueKey('list'),
+                            onNotification: (ScrollNotification scrollInfo) {
+                              if (scrollInfo.metrics.pixels ==
+                                      scrollInfo.metrics.maxScrollExtent &&
+                                  _hasMore) {
+                                _loadMoreServices();
+                              }
+                              return true;
+                            },
+                            child: ListView.builder(
+                              itemCount: filteredServices.length +
+                                  (_hasMore ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == filteredServices.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(16.0),
+                                    child: Center(
+                                        child: CircularProgressIndicator()),
+                                  );
+                                }
+                                final service = filteredServices[index];
+                                return FadeTransition(
+                                  opacity: _fadeController,
+                                  child: _buildServiceCard(service),
+                                );
+                              },
+                            ),
+                          ),
+                  ),
           ),
         ],
       ),
@@ -174,50 +201,54 @@ class _SearchScreenState extends State<SearchScreen> {
           context,
           MaterialPageRoute(
             builder: (context) =>
-                ServiceDetailScreen(service: service), // Uso correcto
+                ServiceDetailScreen(service: service),
           ),
         );
       },
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        elevation: 2,
+        elevation: 3,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
-              child: imageUrl != null && imageUrl.isNotEmpty
-                  ? Image.network(
-                      imageUrl,
-                      height: 150,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Image.network(
-                          'https://i.imgur.com/FlcmJ1h.jpg',
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        );
-                      },
-                    )
-                  : imageBytea != null && imageBytea.isNotEmpty
-                      ? Image.memory(
-                          Uint8List.fromList(hex.decode(imageBytea)),
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.network(
-                          'https://i.imgur.com/FlcmJ1h.jpg',
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+            // Agregamos un Hero para transiciones entre la lista y el detalle
+            Hero(
+              tag: 'serviceImage_${service['id']}',
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? Image.network(
+                        imageUrl,
+                        height: 150,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Image.network(
+                            'https://i.imgur.com/FlcmJ1h.jpg',
+                            height: 150,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      )
+                    : imageBytea != null && imageBytea.isNotEmpty
+                        ? Image.memory(
+                            Uint8List.fromList(hex.decode(imageBytea)),
+                            height: 150,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.network(
+                            'https://i.imgur.com/FlcmJ1h.jpg',
+                            height: 150,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),

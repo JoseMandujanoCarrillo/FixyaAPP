@@ -28,6 +28,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
 
+  // Variable para decidir si el servicio es Clean Fast
+  bool _isCleanFast = false;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -254,6 +257,7 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
         'imagebyte': '', // Si no se utiliza, se puede dejar vacío
         'imageUrl': imageUrl,
         'schedule': scheduleData,
+        'isCleanFast': _isCleanFast,
       };
 
       final response = await http.post(
@@ -341,6 +345,19 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
     );
   }
 
+  /// Widget para seleccionar si el servicio es Clean Fast
+  Widget _buildCleanFastSwitch() {
+    return SwitchListTile(
+      title: const Text("¿Es Clean Fast?"),
+      value: _isCleanFast,
+      onChanged: (bool value) {
+        setState(() {
+          _isCleanFast = value;
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -369,6 +386,9 @@ class _AddServiceScreenState extends State<AddServiceScreen> {
               const SizedBox(height: 20),
               // Sección para el schedule
               _buildSchedulePicker(),
+              const SizedBox(height: 20),
+              // Campo para indicar si el servicio es Clean Fast
+              _buildCleanFastSwitch(),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isLoading ? null : _submitService,

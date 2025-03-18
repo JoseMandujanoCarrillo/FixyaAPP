@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:convert/convert.dart';
 import 'package:flutter/material.dart';
@@ -25,7 +26,8 @@ class CleanersHome extends StatefulWidget {
   _CleanersHomeState createState() => _CleanersHomeState();
 }
 
-class _CleanersHomeState extends State<CleanersHome> {
+class _CleanersHomeState extends State<CleanersHome>
+    with SingleTickerProviderStateMixin {
   List<dynamic> services = [];
   String userName = "Usuario";
   String userEmail = "";
@@ -49,6 +51,8 @@ class _CleanersHomeState extends State<CleanersHome> {
   // Set para almacenar los IDs de propuestas ya notificadas y evitar duplicados
   Set<int> _notifiedProposalIds = {};
 
+  late AnimationController _fadeController;
+
   @override
   void initState() {
     super.initState();
@@ -56,14 +60,20 @@ class _CleanersHomeState extends State<CleanersHome> {
     _loadNotifiedProposalIds();
     _loadData();
 
+    // Controlador de animación para transiciones de desvanecimiento
+    _fadeController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
+    _fadeController.forward();
+
     // Inicia el timer para chequear propuestas cada 30 segundos
-    _proposalsTimer = Timer.periodic(
-        const Duration(seconds: 30), (_) => _checkForNewProposals());
+    _proposalsTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _checkForNewProposals());
   }
 
   @override
   void dispose() {
     _proposalsTimer?.cancel();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -72,8 +82,7 @@ class _CleanersHomeState extends State<CleanersHome> {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings();
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
+    const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
     );
@@ -92,9 +101,7 @@ class _CleanersHomeState extends State<CleanersHome> {
   Future<void> _saveNotifiedProposalIds() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setStringList(
-      'notifiedProposalIds',
-      _notifiedProposalIds.map((id) => id.toString()).toList(),
-    );
+        'notifiedProposalIds', _notifiedProposalIds.map((id) => id.toString()).toList());
   }
 
   Future<void> _loadData() async {
@@ -137,10 +144,7 @@ class _CleanersHomeState extends State<CleanersHome> {
     try {
       final response = await http.get(
         Uri.parse('https://apifixya.onrender.com/cleaners/me/services'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'accept': 'application/json'
-        },
+        headers: {'Authorization': 'Bearer $token', 'accept': 'application/json'},
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -162,10 +166,7 @@ class _CleanersHomeState extends State<CleanersHome> {
     try {
       final response = await http.get(
         Uri.parse('https://apifixya.onrender.com/proposals/for-cleaner'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'accept': 'application/json'
-        },
+        headers: {'Authorization': 'Bearer $token', 'accept': 'application/json'},
       );
       if (response.statusCode == 200) {
         final proposals = json.decode(response.body) as List;
@@ -179,15 +180,14 @@ class _CleanersHomeState extends State<CleanersHome> {
               notifications.add({
                 'id': proposalId,
                 'title': 'Nueva propuesta',
-                'body':
-                    'Tienes una nueva propuesta: ${proposal['description'] ?? ''}',
+                'body': 'Tienes una nueva propuesta: ${proposal['description'] ?? ''}',
                 'timestamp': DateTime.now().toIso8601String(),
               });
             });
             _showLocalNotification(
-              proposalId,
-              'Nueva propuesta',
-              'Tienes una nueva propuesta.',
+              proposalId, 
+              'Nueva propuesta', 
+              'Tienes una nueva propuesta.'
             );
           }
         }
@@ -212,14 +212,9 @@ class _CleanersHomeState extends State<CleanersHome> {
     const DarwinNotificationDetails iOSPlatformChannelSpecifics =
         DarwinNotificationDetails();
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-      iOS: iOSPlatformChannelSpecifics,
-    );
+        android: androidPlatformChannelSpecifics, iOS: iOSPlatformChannelSpecifics);
     await flutterLocalNotificationsPlugin.show(
-      id,
-      title,
-      body,
-      platformChannelSpecifics,
+      id, title, body, platformChannelSpecifics,
       payload: 'propuesta_$id',
     );
   }
@@ -281,8 +276,7 @@ class _CleanersHomeState extends State<CleanersHome> {
           auditorId = selectedAuditorId;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Auditor seleccionado. Verificación pendiente.")),
+          const SnackBar(content: Text("Auditor seleccionado. Verificación pendiente.")),
         );
       } else {
         print("Error en la solicitud de verificación: ${response.statusCode}");
@@ -295,30 +289,33 @@ class _CleanersHomeState extends State<CleanersHome> {
   Widget _buildHomeContent() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Hola, $userName!",
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            "Tus Servicios",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          services.isNotEmpty
-              ? ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: services.length,
-                  itemBuilder: (context, index) {
-                    return _buildServiceCard(services[index]);
-                  },
-                )
-              : const Text("No tienes servicios asignados."),
-        ],
+      child: FadeTransition(
+        opacity: _fadeController,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Hola, $userName!",
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Tus Servicios",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            services.isNotEmpty
+                ? ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: services.length,
+                    itemBuilder: (context, index) {
+                      return _buildServiceCard(services[index]);
+                    },
+                  )
+                : const Text("No tienes servicios asignados."),
+          ],
+        ),
       ),
     );
   }
@@ -339,42 +336,53 @@ class _CleanersHomeState extends State<CleanersHome> {
     }
 
     return GestureDetector(
-      onTap: () {
-        // Navegar a la pantalla de detalle del servicio si se desea.
+      onTap: () async {
+        // Al presionar la tarjeta se navega a la pantalla de edición del servicio.
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EditServiceScreen(service: service),
+          ),
+        );
+        if (result == true) {
+          await _getServices();
+        }
       },
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 8),
         child: Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: const Color(0xFFC5E7F2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                child: imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      )
-                    : imageBytea != null && imageBytea.isNotEmpty
-                        ? Image.memory(
-                            Uint8List.fromList(hex.decode(imageBytea)),
-                            height: 180,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            height: 180,
-                            width: double.infinity,
-                            color: Colors.grey,
-                            child: const Icon(Icons.image, size: 60),
-                          ),
+              Hero(
+                tag: 'serviceImage_${service['id']}',
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: imageUrl != null && imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      : imageBytea != null && imageBytea.isNotEmpty
+                          ? Image.memory(
+                              Uint8List.fromList(hex.decode(imageBytea)),
+                              height: 180,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              height: 180,
+                              width: double.infinity,
+                              color: Colors.grey,
+                              child: const Icon(Icons.image, size: 60),
+                            ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.all(12.0),
@@ -418,7 +426,7 @@ class _CleanersHomeState extends State<CleanersHome> {
       case 1:
         return const ProposalsCleaners();
       case 2:
-        return const ChatCleanerListPage();
+        return const CleanerChatListPage();
       case 3:
         return const CleanersProfile();
       default:
@@ -431,11 +439,11 @@ class _CleanersHomeState extends State<CleanersHome> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color.fromARGB(255, 0, 184, 255),
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black),
+            icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () async {
               setState(() {
                 _isLoading = true;
@@ -444,11 +452,11 @@ class _CleanersHomeState extends State<CleanersHome> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.filter_alt, color: Colors.black),
+            icon: const Icon(Icons.filter_alt, color: Colors.white),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.notifications, color: Colors.black),
+            icon: const Icon(Icons.notifications, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
@@ -529,7 +537,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
       return;
     }
 
-    double price = _selectedPlan == "monthly" ? 4.0 : 45.0;
+    double price = _selectedPlan == "monthly" ? 2.0 : 20.0;
     String title = _selectedPlan == "monthly" ? "Plan Mensual" : "Plan Anual";
 
     final preferenceBody = jsonEncode({
@@ -554,8 +562,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
     });
 
     final response = await http.post(
-      Uri.parse(
-          "https://api.mercadopago.com/checkout/preferences?access_token=$mercadoPagoAccessToken"),
+      Uri.parse("https://api.mercadopago.com/checkout/preferences?access_token=$mercadoPagoAccessToken"),
       headers: {"Content-Type": "application/json"},
       body: preferenceBody,
     );
@@ -606,23 +613,32 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
           _selectedPlan = planKey;
         });
       },
-      child: Card(
-        shape: RoundedRectangleBorder(
-          side: BorderSide(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          border: Border.all(
             color: isSelected ? Colors.blueAccent : Colors.transparent,
             width: 2,
           ),
           borderRadius: BorderRadius.circular(16),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.blueAccent.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : [],
         ),
-        elevation: isSelected ? 8 : 4,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(subtitle, style: const TextStyle(fontSize: 16)),
               const SizedBox(height: 12),
@@ -642,6 +658,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 0, 184, 255),
         title: const Text("Selecciona un plan"),
       ),
       body: Padding(
@@ -651,15 +668,15 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
             _buildPlanCard(
               planKey: "monthly",
               title: "Plan Mensual",
-              subtitle: "Disfruta de nuestros servicios por solo \$4 al mes.",
-              price: 4.0,
+              subtitle: "Disfruta de nuestros servicios por solo \$2 al mes.",
+              price: 2.0,
             ),
             const SizedBox(height: 16),
             _buildPlanCard(
               planKey: "annual",
               title: "Plan Anual",
-              subtitle: "Ahorra con nuestro plan anual por \$45 al año.",
-              price: 45.0,
+              subtitle: "Ahorra con nuestro plan anual por \$20 al año.",
+              price: 20.0,
             ),
             const SizedBox(height: 20),
             _isProcessing
@@ -725,10 +742,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 0, 184, 255),
         title: const Text('Notificaciones'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete),
+            icon: const Icon(Icons.delete, color: Colors.white),
             onPressed: _clearNotifications,
           ),
         ],
@@ -749,6 +767,218 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 );
               },
             ),
+    );
+  }
+}
+
+/// Pantalla para editar un servicio
+class EditServiceScreen extends StatefulWidget {
+  final dynamic service;
+  const EditServiceScreen({Key? key, required this.service}) : super(key: key);
+
+  @override
+  _EditServiceScreenState createState() => _EditServiceScreenState();
+}
+
+class _EditServiceScreenState extends State<EditServiceScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  late TextEditingController _nameController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _priceController;
+  late TextEditingController _imageUrlController;
+  late TextEditingController _daysController; // Para editar los días (separados por comas)
+  late TextEditingController _startTimeController;
+  late TextEditingController _endTimeController;
+
+  bool _isCleanFast = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final service = widget.service;
+    _nameController = TextEditingController(text: service['name']);
+    _descriptionController = TextEditingController(text: service['description']);
+    _priceController = TextEditingController(text: service['price']?.toString());
+    _imageUrlController = TextEditingController(text: service['imageUrl']);
+    
+    // Inicializamos el horario si existe
+    if (service['schedule'] != null) {
+      _daysController = TextEditingController(
+          text: (service['schedule']['days'] as List<dynamic>).join(', '));
+      _startTimeController =
+          TextEditingController(text: service['schedule']['startTime']);
+      _endTimeController =
+          TextEditingController(text: service['schedule']['endTime']);
+    } else {
+      _daysController = TextEditingController();
+      _startTimeController = TextEditingController();
+      _endTimeController = TextEditingController();
+    }
+    
+    _isCleanFast = service['isCleanFast'] ?? false;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _imageUrlController.dispose();
+    _daysController.dispose();
+    _startTimeController.dispose();
+    _endTimeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _updateService() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+    
+    // Preparamos el arreglo de días a partir del texto ingresado (separado por comas)
+    List<String> days = _daysController.text
+        .split(',')
+        .map((day) => day.trim())
+        .where((day) => day.isNotEmpty)
+        .toList();
+    
+    final Map<String, dynamic> updatedData = {
+      "cleanerId": widget.service['cleanerId'] ?? 1,
+      "description": _descriptionController.text,
+      "price": double.tryParse(_priceController.text) ?? 0,
+      "name": _nameController.text,
+      "imagebyte": null, // Se fuerza a null
+      "imageUrl": _imageUrlController.text,
+      "schedule": {
+        "days": days,
+        "startTime": _startTimeController.text,
+        "endTime": _endTimeController.text,
+      },
+      "isCleanFast": _isCleanFast,
+    };
+
+    final url = Uri.parse('https://apifixya.onrender.com/services/${widget.service['id']}');
+    
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(updatedData),
+      );
+      
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Servicio actualizado exitosamente.")),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error al actualizar el servicio: ${response.statusCode}")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Editar Servicio"),
+        backgroundColor: const Color.fromARGB(255, 0, 184, 255),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: _isLoading 
+            ? const Center(child: CircularProgressIndicator())
+            : Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(labelText: "Nombre"),
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese el nombre" : null,
+                      ),
+                      TextFormField(
+                        controller: _descriptionController,
+                        decoration: const InputDecoration(labelText: "Descripción"),
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese la descripción" : null,
+                      ),
+                      TextFormField(
+                        controller: _priceController,
+                        decoration: const InputDecoration(labelText: "Precio"),
+                        keyboardType: TextInputType.number,
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese el precio" : null,
+                      ),
+                      TextFormField(
+                        controller: _imageUrlController,
+                        decoration: const InputDecoration(labelText: "URL de la imagen"),
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese la URL de la imagen" : null,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text("Horario de servicio", style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextFormField(
+                        controller: _daysController,
+                        decoration: const InputDecoration(labelText: "Días (ej. lunes, miércoles)"),
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese los días de servicio" : null,
+                      ),
+                      TextFormField(
+                        controller: _startTimeController,
+                        decoration: const InputDecoration(labelText: "Hora de inicio (ej. 09:00)"),
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese la hora de inicio" : null,
+                      ),
+                      TextFormField(
+                        controller: _endTimeController,
+                        decoration: const InputDecoration(labelText: "Hora de fin (ej. 17:00)"),
+                        validator: (value) =>
+                            value == null || value.isEmpty ? "Ingrese la hora de fin" : null,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Text("Servicio de limpieza exprés:"),
+                          Checkbox(
+                            value: _isCleanFast,
+                            onChanged: (value) {
+                              setState(() {
+                                _isCleanFast = value ?? false;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _updateService,
+                        child: const Text("Guardar Cambios"),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+      ),
     );
   }
 }

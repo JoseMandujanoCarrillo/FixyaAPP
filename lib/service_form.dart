@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'location_selection_screen.dart';
 
-// Credenciales de Mercado Pago (Sandbox)
+/// Credenciales de Mercado Pago (Sandbox)
 const String mercadoPagoAccessToken =
     'TEST-4550829005870809-022619-790e71ca5222fe1f9614e137d9ff2cc8-1155815200';
 
@@ -36,19 +36,26 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Se usa Material3 para alinearse a los lineamientos actuales
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context)),
         title: const Text('Servicio'),
+        elevation: 4,
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
             const SizedBox(height: 40),
-            _buildServiceCard(),
+            // Se utiliza Hero para animar la transición de la tarjeta de servicio
+            Hero(
+              tag: 'serviceCard_${widget.service['id']}',
+              child: _buildServiceCard(),
+            ),
             const SizedBox(height: 15),
             Form(key: _formKey, child: _buildForm()),
             const SizedBox(height: 20),
@@ -63,41 +70,48 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     return Card(
       color: const Color(0xFF94D6FF),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      elevation: 3,
-      margin: const EdgeInsets.all(16),
+      elevation: 6,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.service['name'] ?? 'Servicio limpieza',
-                style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)),
-            const SizedBox(height: 5),
-            Text(widget.service['address'] ??
-                'C. 111 315, Santa Rosa, 97279 Mérida, Yuc.'),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Text('\$${widget.service['price'] ?? 'XXXXX'}',
-                    style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green)),
-                const Text(' aprox',
-                    style: TextStyle(fontSize: 14, color: Colors.green)),
-                const Spacer(),
-                const CircleAvatar(
-                  backgroundColor: Colors.white,
-                  radius: 25,
-                  child: Icon(Icons.person,
-                      color: Color(0xFF94D6FF), size: 30),
-                ),
-              ],
-            ),
-          ],
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: Column(
+            key: ValueKey(widget.service['id']),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.service['name'] ?? 'Servicio limpieza',
+                  style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
+              const SizedBox(height: 5),
+              Text(
+                widget.service['address'] ??
+                    'C. 111 315, Santa Rosa, 97279 Mérida, Yuc.',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text('\$${widget.service['price'] ?? 'XXXXX'}',
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green)),
+                  const Text(' aprox',
+                      style: TextStyle(fontSize: 14, color: Colors.green)),
+                  const Spacer(),
+                  const CircleAvatar(
+                    backgroundColor: Colors.white,
+                    radius: 25,
+                    child: Icon(Icons.person,
+                        color: Color(0xFF94D6FF), size: 30),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -106,36 +120,37 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   Widget _buildForm() {
     return Card(
       color: Colors.white,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      elevation: 3,
-      margin: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      elevation: 6,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Datos del servicio',
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 15),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10)),
-                child: Text(widget.service['name'] ??
-                    'Servicio sin nombre',
-                    style: const TextStyle(fontSize: 16)),
+        child: AnimatedOpacity(
+          opacity: 1.0,
+          duration: const Duration(milliseconds: 500),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Datos del servicio',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 15),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text(widget.service['name'] ?? 'Servicio sin nombre',
+                      style: const TextStyle(fontSize: 16)),
+                ),
               ),
-            ),
-            _buildDateField(),
-            _buildTimeField(),
-            _buildAddressField(),
-          ],
+              _buildDateField(),
+              _buildTimeField(),
+              _buildAddressField(),
+            ],
+          ),
         ),
       ),
     );
@@ -152,13 +167,10 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon: const Icon(Icons.calendar_today,
-              color: Color(0xFF01497C)),
+          suffixIcon: const Icon(Icons.calendar_today, color: Color(0xFF01497C)),
         ),
         validator: (value) =>
-            (value == null || value.isEmpty)
-                ? 'Selecciona una fecha'
-                : null,
+            (value == null || value.isEmpty) ? 'Selecciona una fecha' : null,
         onTap: () async {
           final today = DateTime.now();
           final firstDate = DateTime(today.year, today.month, today.day);
@@ -204,21 +216,18 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           filled: true,
           fillColor: Colors.grey.shade200,
-          suffixIcon: const Icon(Icons.access_time,
-              color: Color(0xFF01497C)),
+          suffixIcon: const Icon(Icons.access_time, color: Color(0xFF01497C)),
         ),
         validator: (value) =>
-            (value == null || value.isEmpty)
-                ? 'Selecciona una hora'
-                : null,
+            (value == null || value.isEmpty) ? 'Selecciona una hora' : null,
         onTap: () async {
           if (_selectedDate == null) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text("Selecciona primero una fecha")));
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Selecciona primero una fecha")));
             return;
           }
-          TimeOfDay? pickedTime = await showTimePicker(
-              context: context, initialTime: TimeOfDay.now());
+          TimeOfDay? pickedTime =
+              await showTimePicker(context: context, initialTime: TimeOfDay.now());
           if (pickedTime != null) {
             final allowedStartStr =
                 widget.service['schedule']?['startTime'] ?? "00:00";
@@ -232,12 +241,12 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             final allowedEndTime = TimeOfDay(
                 hour: int.parse(allowedEndParts[0]),
                 minute: int.parse(allowedEndParts[1]));
-            int toMinutes(TimeOfDay time) =>
-                time.hour * 60 + time.minute;
+            int toMinutes(TimeOfDay time) => time.hour * 60 + time.minute;
             if (toMinutes(pickedTime) < toMinutes(allowedStartTime) ||
                 toMinutes(pickedTime) > toMinutes(allowedEndTime)) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text("La hora seleccionada no está dentro del horario permitido")));
+                  content: Text(
+                      "La hora seleccionada no está dentro del horario permitido")));
               return;
             }
             final now = DateTime.now();
@@ -280,9 +289,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
           suffixIcon: const Icon(Icons.map, color: Color(0xFF01497C)),
         ),
         validator: (value) =>
-            (value == null || value.isEmpty)
-                ? 'Selecciona una ubicación'
-                : null,
+            (value == null || value.isEmpty) ? 'Selecciona una ubicación' : null,
         onTap: () async {
           final selectedAddress = await Navigator.push(
             context,
@@ -362,7 +369,8 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
   bool? _servicioConstante;
   String? _paymentMethod; // "mercadopago"
   String? _paymentReferenceId;
-  final TextEditingController _additionalDescriptionController = TextEditingController();
+  final TextEditingController _additionalDescriptionController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -382,7 +390,6 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
 
   /// Valida que no exista ya una propuesta para el mismo servicio con fecha y hora
   /// en una franja menor a 2 horas.
-  /// Retorna un mensaje de error si hay conflicto o null si la validación es exitosa.
   Future<String?> _validateProposalTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -479,37 +486,41 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
   }
 
   Widget _buildPaymentOptionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Seleccione el método de pago:',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      child: Column(
+        key: ValueKey(_paymentReferenceId),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Seleccione el método de pago:',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: _launchMercadopagoCheckout,
+              child: const Text('Pagar con Mercado Pago',
+                  style: TextStyle(fontSize: 16, color: Colors.white)),
             ),
-            onPressed: _launchMercadopagoCheckout,
-            child: const Text('Pagar con Mercado Pago',
-                style: TextStyle(fontSize: 16, color: Colors.white)),
           ),
-        ),
-        const SizedBox(height: 10),
-        if (_paymentReferenceId != null)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(10)),
-            child: Text("Método: $_paymentMethod\nReferencia: $_paymentReferenceId",
-                style: const TextStyle(fontSize: 16)),
-          ),
-      ],
+          const SizedBox(height: 10),
+          if (_paymentReferenceId != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10)),
+              child: Text("Método: $_paymentMethod\nReferencia: $_paymentReferenceId",
+                  style: const TextStyle(fontSize: 16)),
+            ),
+        ],
+      ),
     );
   }
 
@@ -608,106 +619,114 @@ class _AdditionalQuestionsScreenState extends State<AdditionalQuestionsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context)),
         title: const Text('Últimos pasos'),
+        elevation: 4,
       ),
       backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Form(
             key: _formKey,
             child: Card(
               color: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15)),
-              elevation: 3,
+              elevation: 6,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 40),
-                    const Text('Últimos pasos',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    const Text('Al momento de realizar el servicio, ¿se encontrará en la ubicación?'),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            value: true,
-                            groupValue: _usuarioEnCasa,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                _usuarioEnCasa = value;
-                              });
-                            },
-                            title: const Text("Sí"),
+                child: AnimatedScale(
+                  scale: 1.0,
+                  duration: const Duration(milliseconds: 500),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 40),
+                      const Text('Últimos pasos',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      const Text(
+                          'Al momento de realizar el servicio, ¿se encontrará en la ubicación?'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<bool>(
+                              value: true,
+                              groupValue: _usuarioEnCasa,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _usuarioEnCasa = value;
+                                });
+                              },
+                              title: const Text("Sí"),
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            value: false,
-                            groupValue: _usuarioEnCasa,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                _usuarioEnCasa = value;
-                              });
-                            },
-                            title: const Text("No"),
+                          Expanded(
+                            child: RadioListTile<bool>(
+                              value: false,
+                              groupValue: _usuarioEnCasa,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _usuarioEnCasa = value;
+                                });
+                              },
+                              title: const Text("No"),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const Text('¿Será un servicio constante?'),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            value: true,
-                            groupValue: _servicioConstante,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                _servicioConstante = value;
-                              });
-                            },
-                            title: const Text("Sí"),
-                          ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            value: false,
-                            groupValue: _servicioConstante,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                _servicioConstante = value;
-                              });
-                            },
-                            title: const Text("No"),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _buildPaymentOptionsSection(),
-                    _buildTextField(_additionalDescriptionController, 'Describe algo adicional al formulario'),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF01497C),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(25)),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        onPressed: _submitProposal,
-                        child: const Text('Solicitar',
-                            style: TextStyle(fontSize: 16, color: Colors.white)),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      const Text('¿Será un servicio constante?'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<bool>(
+                              value: true,
+                              groupValue: _servicioConstante,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _servicioConstante = value;
+                                });
+                              },
+                              title: const Text("Sí"),
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<bool>(
+                              value: false,
+                              groupValue: _servicioConstante,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _servicioConstante = value;
+                                });
+                              },
+                              title: const Text("No"),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildPaymentOptionsSection(),
+                      _buildTextField(_additionalDescriptionController,
+                          'Describe algo adicional al formulario'),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF01497C),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: _submitProposal,
+                          child: const Text('Solicitar',
+                              style: TextStyle(fontSize: 16, color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
