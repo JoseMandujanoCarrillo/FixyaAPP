@@ -20,6 +20,9 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
   // Lista para almacenar ubicaciones anteriores confirmadas.
   final List<Map<String, dynamic>> _previousLocations = [];
 
+  // Controlador de animación para el search bar.
+  double _searchOpacity = 1.0;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +55,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
         final double lng = location['lng'];
         setState(() {
           _selectedLocation = LatLng(lat, lng);
+          _searchOpacity = 0.8;
         });
         _mapController.animateCamera(
           CameraUpdate.newLatLngZoom(_selectedLocation!, 15),
@@ -112,27 +116,35 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
     }
     showModalBottomSheet(
       context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
-        return ListView.builder(
-          itemCount: _previousLocations.length,
-          itemBuilder: (context, index) {
-            final location = _previousLocations[index];
-            return ListTile(
-              title: Text(location['address']),
-              subtitle: Text('Lat: ${location['lat']}, Lng: ${location['lng']}'),
-              onTap: () {
-                final lat = location['lat'];
-                final lng = location['lng'];
-                setState(() {
-                  _selectedLocation = LatLng(lat, lng);
-                });
-                _mapController.animateCamera(
-                  CameraUpdate.newLatLngZoom(_selectedLocation!, 15),
-                );
-                Navigator.pop(context);
-              },
-            );
-          },
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          padding: const EdgeInsets.all(16),
+          child: ListView.builder(
+            itemCount: _previousLocations.length,
+            itemBuilder: (context, index) {
+              final location = _previousLocations[index];
+              return ListTile(
+                leading: const Icon(Icons.place),
+                title: Text(location['address']),
+                subtitle: Text('Lat: ${location['lat']}, Lng: ${location['lng']}'),
+                onTap: () {
+                  final lat = location['lat'];
+                  final lng = location['lng'];
+                  setState(() {
+                    _selectedLocation = LatLng(lat, lng);
+                  });
+                  _mapController.animateCamera(
+                    CameraUpdate.newLatLngZoom(_selectedLocation!, 15),
+                  );
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
         );
       },
     );
@@ -168,6 +180,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Se envuelve GoogleMap en un ClipRRect para darle bordes redondeados sutiles.
     return Scaffold(
       appBar: AppBar(
         title: const Text("Selecciona tu ubicación"),
@@ -180,51 +193,58 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(20.9671, -89.6237), // Mérida, Yucatán
-              zoom: 15,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: GoogleMap(
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(20.9671, -89.6237), // Mérida, Yucatán
+                zoom: 15,
+              ),
+              onTap: _onTap,
+              markers: _selectedLocation != null
+                  ? {
+                      Marker(
+                        markerId: const MarkerId("selected"),
+                        position: _selectedLocation!,
+                      )
+                    }
+                  : {},
             ),
-            onTap: _onTap,
-            markers: _selectedLocation != null
-                ? {
-                    Marker(
-                      markerId: const MarkerId("selected"),
-                      position: _selectedLocation!,
-                    )
-                  }
-                : {},
           ),
           // Buscador de dirección en la parte superior.
           Positioned(
             top: 20,
             left: 20,
             right: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: "Buscar dirección",
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: () => _searchAddress(_searchController.text),
-                  ),
-                  border: InputBorder.none,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 400),
+              opacity: _searchOpacity,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                onSubmitted: _searchAddress,
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: "Buscar dirección",
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: () => _searchAddress(_searchController.text),
+                    ),
+                    border: InputBorder.none,
+                  ),
+                  onSubmitted: _searchAddress,
+                ),
               ),
             ),
           ),
@@ -233,9 +253,14 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
             bottom: 20,
             left: 20,
             right: 20,
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              ),
               onPressed: _confirmLocation,
-              child: const Text("Confirmar ubicación"),
+              icon: const Icon(Icons.check),
+              label: const Text("Confirmar ubicación"),
             ),
           ),
         ],
