@@ -61,7 +61,7 @@ class _ProposalsPageState extends State<ProposalsPage>
 
   @override
   void dispose() {
-    _mainTabController.dispose();
+    _tabController.dispose(); // Dispose del TabController
     _pollingTimer?.cancel(); // Cancelar el timer para evitar fugas de memoria
     super.dispose();
   }
